@@ -1,0 +1,118 @@
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;700&family=Rajdhani:wght@400;500;600;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #060b13;
+  --surface: #0c1420;
+  --surface2: #111d2e;
+  --border: #1a2d47;
+  --border2: #243c5a;
+  --cyan: #00d4ff;
+  --amber: #ffaa00;
+  --green: #00ff88;
+  --purple: #cc00ff;
+  --red: #ff3860;
+  --text: #c0d4e8;
+  --dim: #3d5570;
+}
+
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+}
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: "JetBrains Mono", monospace;
+}
+
+/* MapLibre overrides */
+.maplibregl-map {
+  background: #060b13 !important;
+}
+.maplibregl-ctrl-attrib {
+  background: rgba(6, 11, 19, 0.7) !important;
+  color: var(--dim) !important;
+  font-size: 9px !important;
+}
+.maplibregl-ctrl-attrib a {
+  color: var(--dim) !important;
+}
+.maplibregl-ctrl-group {
+  background: var(--surface2) !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: none !important;
+  border-radius: 4px !important;
+}
+.maplibregl-ctrl-group button {
+  background: var(--surface2) !important;
+  color: var(--text) !important;
+}
+.maplibregl-ctrl-group button:hover {
+  background: var(--border) !important;
+}
+.maplibregl-ctrl-group button + button {
+  border-top: 1px solid var(--border) !important;
+}
+/* Custom popup (used for link tooltips) */
+.ml-popup .maplibregl-popup-content {
+  background:    rgba(10, 14, 20, 0.92);
+  border:        1px solid var(--border2);
+  border-radius: 4px;
+  color:         var(--text);
+  font-family:   "JetBrains Mono", monospace;
+  font-size:     13px;
+  padding:       8px 12px;
+  box-shadow:    0 4px 20px rgba(0, 0, 0, 0.7);
+  line-height:   1.8;
+}
+.ml-popup .maplibregl-popup-tip {
+  border-top-color:    rgba(10, 14, 20, 0.92) !important;
+  border-bottom-color: rgba(10, 14, 20, 0.92) !important;
+}
+.ml-popup .maplibregl-popup-close-button {
+  display: none;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 3px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 2px;
+}
+
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.2;
+  }
+}
+.blinking {
+  animation: blink 0.75s infinite;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.fade-in {
+  animation: fadeIn 0.2s ease;
+}
