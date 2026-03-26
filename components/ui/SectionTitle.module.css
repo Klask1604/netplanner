@@ -1,0 +1,10 @@
+.title {
+  font-size: 11px;
+  letter-spacing: 2px;
+  color: var(--dim);
+  text-transform: uppercase;
+  margin-bottom: 7px;
+  margin-top: 14px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}

@@ -1,0 +1,65 @@
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  gap: 10px;
+  color: var(--dim);
+  font-size: 13px;
+  text-align: center;
+  line-height: 1.7;
+}
+
+.emptyIcon {
+  opacity: 0.2;
+  margin-bottom: 4px;
+}
+
+/* --station-color is injected via inline style per item */
+.item {
+  border: 1px solid var(--border);
+  background: transparent;
+  border-radius: 4px;
+  padding: 7px 9px;
+  margin-bottom: 5px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  transition: border-color 0.12s, background 0.12s;
+}
+
+.item.selected {
+  border-color: var(--station-color);
+  background: color-mix(in srgb, var(--station-color) 5%, transparent);
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.itemContent {
+  flex: 1;
+  min-width: 0;
+}
+
+.itemName {
+  font-size: 13px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.itemSub {
+  font-size: 12px;
+  color: var(--dim);
+  margin-top: 1px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}

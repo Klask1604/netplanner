@@ -1,0 +1,177 @@
+.container {
+  /* fade-in handled globally */
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+/* --station-color injected via inline style */
+.typeBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border-radius: 3px;
+  font-size: 12px;
+  font-weight: 600;
+  background: color-mix(in srgb, var(--station-color) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--station-color) 20%, transparent);
+  color: var(--station-color);
+}
+
+.backBtn {
+  background: none;
+  border: none;
+  color: var(--dim);
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  transition: color 0.12s;
+}
+
+.backBtn:hover {
+  color: var(--text);
+}
+
+.nameInput {
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: 3px;
+  color: var(--text);
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 5px 9px;
+  margin-bottom: 10px;
+  outline: none;
+  transition: border-color 0.12s;
+}
+
+.nameInput:focus {
+  border-color: var(--cyan);
+}
+
+.warning {
+  background: rgba(255, 170, 0, 0.08);
+  border: 1px solid rgba(255, 170, 0, 0.25);
+  border-radius: 4px;
+  padding: 7px 10px;
+  margin-bottom: 10px;
+  font-size: 12px;
+  color: var(--amber);
+  line-height: 1.6;
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+}
+
+.warningIcon {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.repeaterInactive {
+  background: rgba(255, 80, 80, 0.08);
+  border: 1px solid rgba(255, 80, 80, 0.30);
+  border-radius: 4px;
+  padding: 7px 10px;
+  margin-bottom: 10px;
+  font-size: 12px;
+  color: #ff6b6b;
+  line-height: 1.6;
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+}
+
+.linkItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 5px 8px;
+  margin-bottom: 4px;
+  font-size: 12px;
+}
+
+.linkName {
+  color: var(--text);
+  margin-bottom: 1px;
+}
+
+.linkStats {
+  color: var(--dim);
+}
+
+.linkTerrain {
+  color: var(--dim);
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+.removeLinkBtn {
+  background: none;
+  border: none;
+  color: var(--dim);
+  cursor: pointer;
+  display: flex;
+  padding: 2px;
+  transition: color 0.12s;
+}
+
+.removeLinkBtn:hover {
+  color: var(--red);
+}
+
+.coords {
+  font-size: 12px;
+  color: var(--dim);
+  line-height: 1.9;
+}
+
+.coordValue {
+  color: var(--text);
+}
+
+.deleteBtn {
+  width: 100%;
+  padding: 7px;
+  margin-top: 8px;
+  background: rgba(255, 56, 96, 0.08);
+  border: 1px solid rgba(255, 56, 96, 0.25);
+  border-radius: 4px;
+  color: var(--red);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  cursor: pointer;
+  letter-spacing: 1px;
+  transition: background 0.12s, border-color 0.12s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.deleteBtn:hover {
+  background: rgba(255, 56, 96, 0.18);
+  border-color: var(--red);
+}
+
+.pendingHint {
+  font-size: 11px;
+  color: var(--dim);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 3px 0 2px;
+  opacity: 0.7;
+}

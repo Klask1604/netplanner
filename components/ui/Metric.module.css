@@ -1,0 +1,21 @@
+.card {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+}
+
+.label {
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: var(--dim);
+  text-transform: uppercase;
+}
+
+.value {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 20px;
+  font-weight: 600;
+  margin-top: 1px;
+}

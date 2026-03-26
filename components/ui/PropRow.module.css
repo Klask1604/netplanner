@@ -1,0 +1,43 @@
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 7px;
+}
+
+.label {
+  font-size: 12px;
+  color: var(--dim);
+  flex-shrink: 0;
+}
+
+.input {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  padding: 3px 7px;
+  width: 85px;
+  text-align: right;
+  outline: none;
+  transition: border-color 0.12s;
+}
+
+.input:focus {
+  border-color: var(--cyan);
+}
+
+.inputInvalid {
+  border-color: var(--red) !important;
+  background: rgba(255, 56, 96, 0.06);
+}
+
+.unit {
+  font-size: 12px;
+  color: var(--dim);
+  width: 32px;
+  flex-shrink: 0;
+}
