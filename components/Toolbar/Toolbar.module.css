@@ -1,0 +1,70 @@
+.toolbar {
+  grid-area: toolbar;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 0;
+  gap: 2px;
+  z-index: 10;
+}
+
+.sep {
+  width: 28px;
+  height: 1px;
+  background: var(--border);
+  margin: 3px 0;
+}
+
+.btnWrap {
+  position: relative;
+}
+
+/* --btn-color is set via inline style and holds the tool's accent color */
+.btn {
+  width: 38px;
+  height: 38px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--dim);
+  transition: color 0.12s, background 0.12s, border-color 0.12s, box-shadow 0.12s;
+}
+
+.btn:hover {
+  color: var(--btn-color, var(--cyan));
+}
+
+.btn.active {
+  background: color-mix(in srgb, var(--btn-color, var(--cyan)) 8%, transparent);
+  border-color: var(--btn-color, var(--cyan));
+  color: var(--btn-color, var(--cyan));
+  box-shadow: 0 0 10px color-mix(in srgb, var(--btn-color, var(--cyan)) 27%, transparent);
+}
+
+.tooltip {
+  position: absolute;
+  left: 46px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: 4px;
+  padding: 4px 9px;
+  font-size: 10px;
+  color: var(--text);
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+
+.btnWrap:hover .tooltip {
+  opacity: 1;
+}
