@@ -12,7 +12,7 @@
   gap: 5px;
   min-width: 130px;
   backdrop-filter: blur(4px);
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 .title {
@@ -40,5 +40,22 @@
   justify-content: space-between;
   font-size: 10px;
   color: var(--dim);
-  font-family: 'JetBrains Mono', monospace;
+  font-family: "JetBrains Mono", monospace;
+}
+
+.opacityControl {
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  color: var(--dim);
+  font-family: "JetBrains Mono", monospace;
+}
+
+.opacityControl input {
+  width: 84px;
+  height: 3px;
+  accent-color: #00d4ff;
+  cursor: pointer;
 }

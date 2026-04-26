@@ -10,6 +10,7 @@ interface UseHeatmapLayerProps {
   stations:         Station[]
   links:            Link[]
   visible:          boolean
+  coverageOpacity:  number
   coveragePolygons: Record<number, CoveragePolygons>
   terrainLinkStats: Record<number, LinkStats>
 }
@@ -92,7 +93,7 @@ function computeCoverageUnion(
 }
 
 export function useHeatmapLayer({
-  mapRef, stations, links, visible, coveragePolygons, terrainLinkStats,
+  mapRef, stations, links, visible, coverageOpacity, coveragePolygons, terrainLinkStats,
 }: UseHeatmapLayerProps) {
   const heatmapDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const relayDebounceRef   = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -231,7 +232,7 @@ export function useHeatmapLayer({
         properties: {
           ring:    marginIndex,
           color:   STOPS[marginIndex].color,
-          opacity: STOPS[marginIndex].opacity,
+          opacity: STOPS[marginIndex].opacity * coverageOpacity,
         },
       })
     }
@@ -258,7 +259,7 @@ export function useHeatmapLayer({
               properties: {
                 ring:    boostedLevel,
                 color:   STOPS[boostedLevel].color,
-                opacity: STOPS[boostedLevel].opacity,
+                opacity: STOPS[boostedLevel].opacity * coverageOpacity,
               },
             })
           } catch {
@@ -330,7 +331,7 @@ export function useHeatmapLayer({
         updateHeatmapSource()
       }, 50)
     }, 150)
-  }, [stations, visible, coveragePolygons])
+  }, [stations, visible, coverageOpacity, coveragePolygons])
 
   // ── Debounced relay update (independent of heatmap visibility) ───────────
   useEffect(() => {

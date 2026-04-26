@@ -16,6 +16,7 @@ import styles from './MapView.module.css'
 export default function MapView() {
   const {
     stations, links, selId, tool, linkSrc, heatmapVisible, coveragePolygons, terrainLinkStats,
+    coverageOpacity,
     hillshadeVisible, terrain3dEnabled, topoMapEnabled, buildingsVisible,
     addStation, removeStation, selectStation, startLink, completeLink, fetchStationElevation,
   } = useNetStore()
@@ -27,7 +28,9 @@ export default function MapView() {
     removeStation, selectStation, startLink, completeLink, fetchStationElevation,
   })
   useLinkSync({ mapRef, links, stations, terrainLinkStats })
-  useHeatmapLayer({ mapRef, stations, links, visible: heatmapVisible, coveragePolygons, terrainLinkStats })
+  useHeatmapLayer({
+    mapRef, stations, links, visible: heatmapVisible, coveragePolygons, terrainLinkStats, coverageOpacity,
+  })
   useTerrainLayer({ mapRef, hillshadeVisible, terrain3dEnabled, topoMapEnabled })
   useBuildingLayer({ mapRef, buildingsVisible })
 

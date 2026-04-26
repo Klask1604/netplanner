@@ -9,11 +9,15 @@ import StationIcon from '@/components/ui/StationIcon'
 import styles from './StationProps.module.css'
 
 export default function StationProps() {
-  const { selId, stations, links, updateStation, removeStation, removeLink, selectStation, polygonPending } = useNetStore()
+  const {
+    selId, stations, links, updateStation, removeStation, removeLink, selectStation,
+    polygonPending, coverageDiagnostics, fetchStationElevation,
+  } = useNetStore()
   const station = stations.find(s => s.id === selId)
   if (!station) return null
 
   const isPending      = polygonPending[station.id] ?? false
+  const coverageDiag   = coverageDiagnostics[station.id]
   const stationConfig  = STATION_TYPES[station.type]
   const eirp           = calcEIRP(station)
   const maxPathLoss    = eirp - station.sens
@@ -93,6 +97,40 @@ export default function StationProps() {
       </div>
       <Metric label="Coverage Radius (Okumura-Hata)" value={`${station.radius.toFixed(3)} km`}                          color="var(--green)" />
       <Metric label="Coverage Area"                  value={`${(Math.PI * station.radius * station.radius).toFixed(2)} km²`} color="var(--green)" />
+      <SectionTitle>Coverage Validator</SectionTitle>
+      <div className={styles.coverageValidation}>
+        <div className={styles.coverageValidationRow}>
+          <span>Status</span>
+          <span
+            style={{
+              color: coverageDiag?.buildingsUsed ? 'var(--green)' : 'var(--amber)',
+            }}
+            title={
+              coverageDiag?.buildingsUsed
+                ? 'Coverage-ul este deformat cu obstacole de cladiri'
+                : 'Nu s-au gasit cladiri pentru zona sau request-ul de cladiri a esuat'
+            }
+          >
+            {coverageDiag?.buildingsUsed ? 'building-aware' : 'terrain-only'}
+          </span>
+        </div>
+        <div className={styles.coverageValidationRow}>
+          <span>Cladiri folosite</span>
+          <span>{coverageDiag?.buildingsCount ?? 0}</span>
+        </div>
+        <div className={styles.coverageValidationRow}>
+          <span>Sample-uri blocate</span>
+          <span>{coverageDiag?.blockedSamples ?? 0}/{coverageDiag?.totalSamples ?? 0}</span>
+        </div>
+        <button
+          className={styles.recomputeCoverageBtn}
+          onClick={() => fetchStationElevation(station.id)}
+          disabled={isPending}
+          title="Recalculeaza coverage-ul pentru aceasta statie"
+        >
+          Revalideaza coverage
+        </button>
+      </div>
 
       {stationLinks.length > 0 && (
         <>
@@ -144,7 +182,10 @@ export default function StationProps() {
         min={0}
       />
       {isPending && (
-        <div className={styles.pendingHint}>calculare polygon...</div>
+        <div className={styles.pendingHint}>
+          <span className={styles.pendingSpinner} />
+          Calcul coverage cu teren + cladiri...
+        </div>
       )}
 
       <button className={styles.deleteBtn} onClick={() => removeStation(station.id)}>

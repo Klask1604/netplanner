@@ -143,6 +143,49 @@
   color: var(--text);
 }
 
+.coverageValidation {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 8px;
+  margin: 4px 0 10px;
+  background: rgba(0, 212, 255, 0.04);
+}
+
+.coverageValidationRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--dim);
+  margin-bottom: 4px;
+}
+
+.recomputeCoverageBtn {
+  width: 100%;
+  margin-top: 6px;
+  padding: 6px 8px;
+  background: rgba(0, 212, 255, 0.08);
+  border: 1px solid rgba(0, 212, 255, 0.30);
+  border-radius: 4px;
+  color: var(--cyan);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  cursor: pointer;
+  letter-spacing: 0.5px;
+  transition: background 0.12s, border-color 0.12s, opacity 0.12s;
+}
+
+.recomputeCoverageBtn:hover:not(:disabled) {
+  background: rgba(0, 212, 255, 0.18);
+  border-color: var(--cyan);
+}
+
+.recomputeCoverageBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .deleteBtn {
   width: 100%;
   padding: 7px;
@@ -170,8 +213,24 @@
 .pendingHint {
   font-size: 11px;
   color: var(--dim);
-  letter-spacing: 1px;
+  letter-spacing: 0.4px;
   text-transform: uppercase;
-  padding: 3px 0 2px;
-  opacity: 0.7;
+  padding: 5px 0 3px;
+  opacity: 0.9;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.pendingSpinner {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 2px solid rgba(0, 212, 255, 0.25);
+  border-top-color: var(--cyan);
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }

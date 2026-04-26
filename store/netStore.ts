@@ -21,9 +21,17 @@ interface NetStore {
   linkSrc:           number | null
   counters:          Record<StationType, number>
   coveragePolygons:  Record<number, CoveragePolygons>
+  coverageDiagnostics: Record<number, {
+    buildingsUsed: boolean
+    buildingsCount: number
+    buildingsSource: 'client' | 'server' | 'none'
+    blockedSamples: number
+    totalSamples: number
+  }>
   polygonPending:    Record<number, boolean>
   terrainLinkStats:  Record<number, LinkStats>
   heatmapVisible:    boolean
+  coverageOpacity:   number
   hillshadeVisible:  boolean
   terrain3dEnabled:  boolean
   topoMapEnabled:    boolean
@@ -46,6 +54,7 @@ interface NetStore {
   exportJSON:            () => string
   importJSON:            (raw: string) => void
   toggleHeatmap:         () => void
+  setCoverageOpacity:    (opacity: number) => void
   toggleHillshade:       () => void
   toggleTerrain3d:       () => void
   toggleTopoMap:         () => void
@@ -78,9 +87,11 @@ export const useNetStore = create<NetStore>((set, get) => ({
   linkSrc:          null,
   counters:         { bts: 0, antenna: 0, router: 0, repeater: 0 },
   coveragePolygons: {},
+  coverageDiagnostics: {},
   polygonPending:   {},
   terrainLinkStats: {},
   heatmapVisible:   false,
+  coverageOpacity:  1,
   hillshadeVisible:  false,
   terrain3dEnabled:  false,
   topoMapEnabled:    false,
@@ -108,6 +119,7 @@ export const useNetStore = create<NetStore>((set, get) => ({
   removeStation: (id) =>
     set(s => {
       const { [id]: _rp, ...remainingPolygons } = s.coveragePolygons
+      const { [id]: _rd, ...remainingDiagnostics } = s.coverageDiagnostics
       const { [id]: _pp, ...remainingPending  } = s.polygonPending
       const affectedLinkIds = s.links
         .filter(link => link.station1Id === id || link.station2Id === id)
@@ -120,6 +132,7 @@ export const useNetStore = create<NetStore>((set, get) => ({
         selId:            s.selId   === id ? null : s.selId,
         linkSrc:          s.linkSrc === id ? null : s.linkSrc,
         coveragePolygons: remainingPolygons,
+        coverageDiagnostics: remainingDiagnostics,
         polygonPending:   remainingPending,
         terrainLinkStats: remainingBudgets,
       }
@@ -221,7 +234,7 @@ export const useNetStore = create<NetStore>((set, get) => ({
       set({
         stations: recomputedStations, links,
         selId: null, linkSrc: null,
-        coveragePolygons: {}, terrainLinkStats: {},
+        coveragePolygons: {}, coverageDiagnostics: {}, terrainLinkStats: {},
       })
       recomputedStations.forEach((st: Station) => get().fetchStationElevation(st.id))
       links.forEach((l: Link) => get().recomputeLinkTerrain(l.id))
@@ -232,6 +245,9 @@ export const useNetStore = create<NetStore>((set, get) => ({
 
   // ── Visibility toggles ─────────────────────────────────────────────────────
   toggleHeatmap:   () => set(s => ({ heatmapVisible:  !s.heatmapVisible })),
+  setCoverageOpacity: (opacity) => set({
+    coverageOpacity: Math.min(1, Math.max(0.15, opacity)),
+  }),
   // Hillshade and topo are mutually exclusive — enabling one disables the other
   toggleHillshade: () => set(s => ({
     hillshadeVisible: !s.hillshadeVisible,
@@ -275,13 +291,23 @@ export const useNetStore = create<NetStore>((set, get) => ({
         body:    JSON.stringify({ station }),
       })
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
-      const { elevation, polygons } = await response.json()
+      const { elevation, polygons, diagnostics } = await response.json()
 
       set(s => ({
         stations: s.stations.map(st =>
           st.id === stationId ? { ...st, elevation } : st
         ),
         coveragePolygons: { ...s.coveragePolygons, [stationId]: polygons },
+        coverageDiagnostics: {
+          ...s.coverageDiagnostics,
+          [stationId]: diagnostics ?? {
+            buildingsUsed: false,
+            buildingsCount: 0,
+            buildingsSource: 'none',
+            blockedSamples: 0,
+            totalSamples: 0,
+          },
+        },
         polygonPending:   { ...s.polygonPending,   [stationId]: false },
       }))
 
@@ -292,7 +318,19 @@ export const useNetStore = create<NetStore>((set, get) => ({
 
     } catch (error) {
       console.warn('Coverage computation failed for station', stationId, error)
-      set(s => ({ polygonPending: { ...s.polygonPending, [stationId]: false } }))
+      set(s => ({
+        polygonPending: { ...s.polygonPending, [stationId]: false },
+        coverageDiagnostics: {
+          ...s.coverageDiagnostics,
+          [stationId]: {
+            buildingsUsed: false,
+            buildingsCount: 0,
+            buildingsSource: 'none',
+            blockedSamples: 0,
+            totalSamples: 0,
+          },
+        },
+      }))
     }
   },
 

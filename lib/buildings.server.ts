@@ -6,6 +6,7 @@
 
 import path from "path";
 import fs from "fs";
+import { COVERAGE_BEARINGS, COVERAGE_SAMPLES } from "@/lib/rf";
 
 export interface Building {
   ring: [number, number][];
@@ -351,9 +352,10 @@ export function augmentElevationsWithBuildings(
 ): number[] {
   if (buildings.length === 0) return terrainElevations;
 
-  const NUM_BEARINGS = 36;
-  const samplesPerBearing = Math.floor(points.length / NUM_BEARINGS);
+  const numBearings = COVERAGE_BEARINGS;
+  const samplesPerBearing = COVERAGE_SAMPLES;
   if (samplesPerBearing === 0) return terrainElevations;
+  if (points.length !== numBearings * samplesPerBearing) return terrainElevations;
 
   const CELL_SIZE_KM = 0.05; // 50m — echilibru overhead grid vs celule verificate
 
@@ -366,8 +368,8 @@ export function augmentElevationsWithBuildings(
 
   const result = [...terrainElevations];
 
-  for (let bearingIndex = 0; bearingIndex < NUM_BEARINGS; bearingIndex++) {
-    const bearingDeg = bearingIndex * 10;
+  for (let bearingIndex = 0; bearingIndex < numBearings; bearingIndex++) {
+    const bearingDeg = bearingIndex * (360 / numBearings);
     const lastIdx = bearingIndex * samplesPerBearing + samplesPerBearing - 1;
     const lastPt = points[lastIdx];
     const dXlast = (lastPt.lat - stationLat) * 111.32;
