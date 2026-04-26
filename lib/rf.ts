@@ -479,8 +479,11 @@ export function isInBeam(
 }
 
 const MARGIN_STOPS = [0, 5, 10, 20, 30] as const; // dB margin thresholds
-export const COVERAGE_BEARINGS = 72; // directions (every 5°)
-export const COVERAGE_SAMPLES = 12; // samples per direction
+// Maximum-resolution coverage grid: 360 bearings × 80 samples = 28 800 samples.
+// Combined with line-of-sight bisection at the obstruction edge this gives
+// ~1 m radial precision near the antenna and ~12 m at 1 km radius.
+export const COVERAGE_BEARINGS = 360; // directions (every 1°)
+export const COVERAGE_SAMPLES = 80; // samples per direction
 
 /**
  * Returns true when bearingDeg falls within the antenna sector defined by
@@ -516,105 +519,302 @@ function samplePoints(
 }
 
 /**
- * Given terrain elevation samples along a single bearing (from nearest to
- * farthest, SAMPLES points), compute:
- *  - whether there is a line-of-sight obstruction and at what fraction
- *  - the effective antenna height at the boundary
+ * Line-of-sight + obstruction analysis for one bearing.
  *
- * antennaMSL = station.elevation + station.height
+ * Inputs (all paralel arrays of length COVERAGE_SAMPLES, ordered nearest-to-farthest):
+ *  - `terrainSamples[i]` — terrain MSL elevation at sample i (m)
+ *  - `buildingHeights[i]` — building height ABOVE terrain at sample i (m, 0 if outside any footprint)
+ *
+ * Obstacle MSL = `terrainSamples[i] + buildingHeights[i]`.
+ * LOS at fraction f along the ray = `antennaMSL + f · (rxMSL − antennaMSL)`.
+ * A sample is blocked iff `obstacleMSL > losElevation`.
+ *
+ * When an obstruction is found at sample `i`, an adaptive bisection runs between
+ * the previous-clear sample (or station origin if i=0) and sample `i`, performing
+ * 6 iterations of linear interpolation on terrain & building height. This places
+ * the obstruction edge with ≈1–2 m precision without any extra terrain fetches.
  */
 function analyseBearing(
-  antennaMslElevation: number,
-  samples: number[],
+  groundElevationAtStation: number,
+  antennaHeightAgl: number,
+  terrainSamples: number[],
+  buildingHeights: number[],
   flatRadiusKm: number,
 ): { obstructedAtKm: number | null; effectiveHeight: number } {
-  const sampleCount = samples.length;
-  const receiverElevation = samples[sampleCount - 1] + 1.5;
+  const sampleCount = terrainSamples.length;
+  const antennaMsl = groundElevationAtStation + antennaHeightAgl;
 
-  for (let i = 0; i < sampleCount; i++) {
-    const pathFraction = (i + 1) / sampleCount;
-    const distKm = pathFraction * flatRadiusKm;
-    const losElevation =
-      antennaMslElevation +
-      pathFraction * (receiverElevation - antennaMslElevation);
-    if (samples[i] > losElevation) {
-      return { obstructedAtKm: distKm, effectiveHeight: 5 };
-    }
+  if (sampleCount === 0) {
+    return {
+      obstructedAtKm: null,
+      effectiveHeight: Math.max(antennaHeightAgl, 5),
+    };
   }
 
-  const effectiveHeight = antennaMslElevation - samples[0];
+  const receiverMsl = terrainSamples[sampleCount - 1] + 1.5;
+
+  // Virtual "previous clear" point at the station origin.
+  let prevF = 0;
+  let prevTerrain = groundElevationAtStation;
+  let prevBuilding = 0;
+
+  for (let i = 0; i < sampleCount; i++) {
+    const f = (i + 1) / sampleCount;
+    const losMsl = antennaMsl + f * (receiverMsl - antennaMsl);
+    const terrain = terrainSamples[i];
+    const building = buildingHeights[i] ?? 0;
+    const obstacleMsl = terrain + building;
+
+    if (obstacleMsl > losMsl) {
+      let lowF = prevF;
+      let lowTerrain = prevTerrain;
+      let lowBuilding = prevBuilding;
+      let highF = f;
+      let highTerrain = terrain;
+      let highBuilding = building;
+
+      for (let iter = 0; iter < 6; iter++) {
+        const midF = (lowF + highF) / 2;
+        const span = highF - lowF || 1;
+        const blend = (midF - lowF) / span;
+        const midTerrain = lowTerrain + blend * (highTerrain - lowTerrain);
+        const midBuilding = lowBuilding + blend * (highBuilding - lowBuilding);
+        const midObstacle = midTerrain + midBuilding;
+        const midLos = antennaMsl + midF * (receiverMsl - antennaMsl);
+        if (midObstacle > midLos) {
+          highF = midF;
+          highTerrain = midTerrain;
+          highBuilding = midBuilding;
+        } else {
+          lowF = midF;
+          lowTerrain = midTerrain;
+          lowBuilding = midBuilding;
+        }
+      }
+
+      const obstructedAtKm = Math.max(lowF * flatRadiusKm, 0.001);
+      return { obstructedAtKm, effectiveHeight: 5 };
+    }
+
+    prevF = f;
+    prevTerrain = terrain;
+    prevBuilding = building;
+  }
+
+  const effectiveHeight = antennaMsl - terrainSamples[0];
   return {
     obstructedAtKm: null,
     effectiveHeight: Math.max(effectiveHeight, 5),
   };
 }
 
-function smoothCircular(values: number[], windowSize = 2): number[] {
+/**
+ * Circular median filter — replaces each radius with the median of a 2·k+1
+ * window around it (wrap-around). Robust to single-bearing spikes/dropouts
+ * (gaps from buildings, noisy elevation pixels) without rounding off real
+ * concave shapes the way mean smoothing does.
+ */
+function medianCircular(values: number[], windowSize = 2): number[] {
   if (values.length === 0 || windowSize <= 0) return values;
-  const smoothed: number[] = new Array(values.length).fill(0);
+  const result: number[] = new Array(values.length).fill(0);
+  const buf: number[] = new Array(2 * windowSize + 1);
   for (let i = 0; i < values.length; i++) {
-    let sum = 0;
-    let count = 0;
     for (let k = -windowSize; k <= windowSize; k++) {
       const idx = (i + k + values.length) % values.length;
-      sum += values[idx];
-      count++;
+      buf[k + windowSize] = values[idx];
     }
-    smoothed[i] = sum / count;
+    buf.sort((a, b) => a - b);
+    result[i] = buf[windowSize];
   }
-  return smoothed;
+  return result;
+}
+
+/** Linear (non-wrap) median filter for sectorial / non-omni patterns. */
+function medianLinear(values: number[], windowSize = 2): number[] {
+  if (values.length === 0 || windowSize <= 0) return values;
+  const result: number[] = new Array(values.length).fill(0);
+  const buf: number[] = [];
+  for (let i = 0; i < values.length; i++) {
+    buf.length = 0;
+    for (let k = -windowSize; k <= windowSize; k++) {
+      const idx = i + k;
+      if (idx < 0 || idx >= values.length) continue;
+      buf.push(values[idx]);
+    }
+    buf.sort((a, b) => a - b);
+    result[i] = buf[Math.floor(buf.length / 2)];
+  }
+  return result;
+}
+
+function clampCircularDelta(
+  values: number[],
+  maxDeltaKm: number,
+  passes = 2,
+): number[] {
+  if (values.length < 3 || maxDeltaKm <= 0) return values;
+  let result = [...values];
+  for (let pass = 0; pass < passes; pass++) {
+    const next = [...result];
+    for (let i = 0; i < result.length; i++) {
+      const prev = result[(i - 1 + result.length) % result.length];
+      const curr = result[i];
+      const delta = curr - prev;
+      if (delta > maxDeltaKm) next[i] = prev + maxDeltaKm;
+      else if (delta < -maxDeltaKm) next[i] = prev - maxDeltaKm;
+    }
+    result = next;
+  }
+  return result;
+}
+
+function clampLinearDelta(
+  values: number[],
+  maxDeltaKm: number,
+  passes = 2,
+): number[] {
+  if (values.length < 3 || maxDeltaKm <= 0) return values;
+  let result = [...values];
+  for (let pass = 0; pass < passes; pass++) {
+    const forward = [...result];
+    for (let i = 1; i < result.length; i++) {
+      const prev = forward[i - 1];
+      const curr = forward[i];
+      const delta = curr - prev;
+      if (delta > maxDeltaKm) forward[i] = prev + maxDeltaKm;
+      else if (delta < -maxDeltaKm) forward[i] = prev - maxDeltaKm;
+    }
+
+    const backward = [...forward];
+    for (let i = backward.length - 2; i >= 0; i--) {
+      const next = backward[i + 1];
+      const curr = backward[i];
+      const delta = curr - next;
+      if (delta > maxDeltaKm) backward[i] = next + maxDeltaKm;
+      else if (delta < -maxDeltaKm) backward[i] = next - maxDeltaKm;
+    }
+    result = backward;
+  }
+  return result;
+}
+
+function removeRadiusOutliers(
+  values: number[],
+  maxMultiplier = 2.2,
+  minJumpKm = 0.06,
+  circular = true,
+): number[] {
+  if (values.length < 3) return values;
+  const filtered = [...values];
+  for (let i = 0; i < values.length; i++) {
+    const leftIndex = circular
+      ? (i - 1 + values.length) % values.length
+      : Math.max(0, i - 1);
+    const rightIndex = circular
+      ? (i + 1) % values.length
+      : Math.min(values.length - 1, i + 1);
+    const neighborAvg = (values[leftIndex] + values[rightIndex]) / 2;
+    const curr = values[i];
+    if (
+      curr > neighborAvg * maxMultiplier &&
+      curr - neighborAvg > minJumpKm
+    ) {
+      filtered[i] = neighborAvg;
+    }
+  }
+  return filtered;
+}
+
+export interface CoverageRawDiagnostics {
+  /** Total terrain samples used (== COVERAGE_BEARINGS · COVERAGE_SAMPLES). */
+  samplesUsed: number;
+  /** Number of bearings inside the antenna sector that hit a real obstruction. */
+  obstructedBearings: number;
+  /** Total bearings inside the antenna sector (denominator for ratios). */
+  totalBearings: number;
+  /** Mean obstruction distance across obstructed bearings (km), null when none. */
+  meanObstructionKm: number | null;
+}
+
+export interface TerrainCoverageResult {
+  polygons: CoveragePolygons;
+  diagnostics: CoverageRawDiagnostics;
 }
 
 /**
- * Compute terrain-aware coverage polygons for a station.
+ * Compute terrain + building-aware coverage polygons for a station.
  *
- * @param station   The station (must have elevation populated)
- * @param terrainElevations  Flat array of terrain elevations in row-major order:
- *   row = bearing index (0..COVERAGE_BEARINGS-1), col = sample index
- *   i.e. terrainElevations[bearing * COVERAGE_SAMPLES + sample]
- * @returns CoveragePolygons — 5 polygons, one per MARGIN_STOPS threshold,
- *   each is an array of [lat,lng] vertices.
+ * @param station            Station with `elevation` populated (ground MSL at
+ *                           station, optionally already adjusted for rooftop
+ *                           placement upstream).
+ * @param terrainElevations  Row-major flat array of TERRAIN MSL (m) for each
+ *                           sample point: `[bearing * SAMPLES + sample]`.
+ * @param buildingHeights    Parallel array of building height ABOVE terrain (m)
+ *                           at the same sample points (0 outside any footprint).
+ *                           Pass an all-zero array to disable building LOS.
  */
 export function terrainCoveragePolygon(
   station: Station,
   terrainElevations: number[],
-): CoveragePolygons {
-  const antennaMslElevation = station.elevation + station.height;
+  buildingHeights: number[],
+): TerrainCoverageResult {
   const flatRadiusKm = station.radius;
   const beamwidthDeg = station.beamwidth ?? 360;
   const isOmnidirectional = beamwidthDeg >= 355;
+  const antennaHeightAgl = station.height;
+  const groundElevation = station.elevation;
 
   const polygons = MARGIN_STOPS.map(
     () => [] as [number, number][],
   ) as unknown as CoveragePolygons;
 
+  // Pre-compute LOS analysis once per bearing (independent of margin band).
+  const bearingDegs: number[] = [];
+  const obstructedAtKmList: (number | null)[] = [];
+  const effectiveHeightList: number[] = [];
+
+  for (
+    let bearingIndex = 0;
+    bearingIndex < COVERAGE_BEARINGS;
+    bearingIndex++
+  ) {
+    const bearingDeg = bearingIndex * (360 / COVERAGE_BEARINGS);
+    if (!bearingInSector(bearingDeg, station.azimuth, beamwidthDeg)) continue;
+
+    const sliceStart = bearingIndex * COVERAGE_SAMPLES;
+    const sliceEnd = sliceStart + COVERAGE_SAMPLES;
+    const terrainSamples = terrainElevations.slice(sliceStart, sliceEnd);
+    const heightSamples = buildingHeights.slice(sliceStart, sliceEnd);
+
+    const { obstructedAtKm, effectiveHeight } = analyseBearing(
+      groundElevation,
+      antennaHeightAgl,
+      terrainSamples,
+      heightSamples,
+      flatRadiusKm,
+    );
+
+    bearingDegs.push(bearingDeg);
+    obstructedAtKmList.push(obstructedAtKm);
+    effectiveHeightList.push(effectiveHeight);
+  }
+
+  // Per-bearing smoothing thresholds tuned for the 1°/360-bearing grid.
+  const maxNeighborJumpKm = Math.max(flatRadiusKm * 0.04, 0.02);
+  const outlierJumpKm = Math.max(flatRadiusKm * 0.12, 0.03);
+
   for (let marginIndex = 0; marginIndex < MARGIN_STOPS.length; marginIndex++) {
     const ring: [number, number][] = [];
 
     if (!isOmnidirectional) {
-      ring.push([station.lat, station.lng]); // sector polygon starts at center
+      ring.push([station.lat, station.lng]);
     }
 
     const perBearingRadius: number[] = [];
-    const perBearingDeg: number[] = [];
 
-    for (
-      let bearingIndex = 0;
-      bearingIndex < COVERAGE_BEARINGS;
-      bearingIndex++
-    ) {
-      const bearingDeg = bearingIndex * (360 / COVERAGE_BEARINGS);
-      if (!bearingInSector(bearingDeg, station.azimuth, beamwidthDeg)) continue;
-
-      const samples = terrainElevations.slice(
-        bearingIndex * COVERAGE_SAMPLES,
-        bearingIndex * COVERAGE_SAMPLES + COVERAGE_SAMPLES,
-      );
-      const { obstructedAtKm, effectiveHeight } = analyseBearing(
-        antennaMslElevation,
-        samples,
-        flatRadiusKm,
-      );
+    for (let i = 0; i < bearingDegs.length; i++) {
+      const obstructedAtKm = obstructedAtKmList[i];
+      const effectiveHeight = effectiveHeightList[i];
 
       const effectiveRadiusKm =
         obstructedAtKm !== null
@@ -630,31 +830,62 @@ export function terrainCoveragePolygon(
           : effectiveRadiusKm *
             Math.pow(10, -marginDb / okumuraHataSlope(effectiveHeight));
 
-      perBearingDeg.push(bearingDeg);
       perBearingRadius.push(coverageRadiusKm);
     }
 
-    // Smooth sharp per-bearing transitions to reduce star-like spikes.
-    const smoothedRadius = smoothCircular(perBearingRadius, 2);
-    for (let i = 0; i < smoothedRadius.length; i++) {
+    // Median filter is the primary spike remover (robust to single-bearing
+    // dropouts caused by buildings on a 1° resolution grid).
+    const outlierCleaned = removeRadiusOutliers(
+      perBearingRadius,
+      2.0,
+      outlierJumpKm,
+      isOmnidirectional,
+    );
+    const medianFiltered = isOmnidirectional
+      ? medianCircular(outlierCleaned, 2)
+      : medianLinear(outlierCleaned, 2);
+    const stabilizedRadius = isOmnidirectional
+      ? clampCircularDelta(medianFiltered, maxNeighborJumpKm, 3)
+      : clampLinearDelta(medianFiltered, maxNeighborJumpKm, 3);
+
+    for (let i = 0; i < stabilizedRadius.length; i++) {
       ring.push(
         destinationPoint(
           station.lat,
           station.lng,
-          perBearingDeg[i],
-          smoothedRadius[i],
+          bearingDegs[i],
+          stabilizedRadius[i],
         ),
       );
     }
 
     if (!isOmnidirectional) {
-      ring.push([station.lat, station.lng]); // close sector back to center
+      ring.push([station.lat, station.lng]);
     }
 
     polygons[marginIndex] = ring;
   }
 
-  return polygons;
+  let obstructedBearings = 0;
+  let obstructionSumKm = 0;
+  for (const d of obstructedAtKmList) {
+    if (d !== null) {
+      obstructedBearings++;
+      obstructionSumKm += d;
+    }
+  }
+
+  const diagnostics: CoverageRawDiagnostics = {
+    samplesUsed: COVERAGE_BEARINGS * COVERAGE_SAMPLES,
+    obstructedBearings,
+    totalBearings: bearingDegs.length,
+    meanObstructionKm:
+      obstructedBearings > 0
+        ? obstructionSumKm / obstructedBearings
+        : null,
+  };
+
+  return { polygons, diagnostics };
 }
 
 /**

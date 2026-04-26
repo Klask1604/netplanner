@@ -103,6 +103,104 @@ body {
   animation: blink 0.75s infinite;
 }
 
+.marker3d-wrap {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--cyan);
+  pointer-events: auto;
+}
+
+.marker3d-core {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #0d1420;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: currentColor;
+  position: relative;
+  z-index: 3;
+}
+
+.marker3d-mast {
+  position: absolute;
+  width: 2px;
+  background: currentColor;
+  bottom: -8px;
+  opacity: 0.9;
+  z-index: 2;
+}
+
+.marker3d-base {
+  position: absolute;
+  width: 16px;
+  height: 6px;
+  border-radius: 999px;
+  bottom: -12px;
+  z-index: 1;
+}
+
+.marker3d-base.ground {
+  background: rgba(120, 220, 255, 0.2);
+  border: 1px solid rgba(120, 220, 255, 0.45);
+}
+
+.marker3d-base.roof {
+  background: rgba(0, 255, 136, 0.22);
+  border: 1px solid rgba(0, 255, 136, 0.55);
+}
+
+.marker3d-label {
+  position: absolute;
+  bottom: -24px;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-size: 9px;
+  line-height: 1;
+  letter-spacing: 0.4px;
+  font-family: "JetBrains Mono", monospace;
+  color: #b8c2d8;
+  background: rgba(6, 10, 16, 0.9);
+  border: 1px solid rgba(110, 140, 180, 0.35);
+  border-radius: 999px;
+  padding: 2px 5px;
+  pointer-events: none;
+}
+
+.marker3d-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 700;
+  font-family: "JetBrains Mono", monospace;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.45);
+  color: #061015;
+  z-index: 4;
+}
+
+.marker3d-badge.ground {
+  background: #7cc7ff;
+}
+
+.marker3d-badge.roof {
+  background: #00ff88;
+}
+
 @keyframes fadeIn {
   from {
     opacity: 0;

@@ -16,6 +16,7 @@ import styles from './MapView.module.css'
 export default function MapView() {
   const {
     stations, links, selId, tool, linkSrc, heatmapVisible, coveragePolygons, terrainLinkStats,
+    coverageDiagnostics,
     coverageOpacity,
     hillshadeVisible, terrain3dEnabled, topoMapEnabled, buildingsVisible,
     addStation, removeStation, selectStation, startLink, completeLink, fetchStationElevation,
@@ -24,7 +25,7 @@ export default function MapView() {
   const { mapRef } = useMapInit({ addStation, selectStation })
 
   useMarkerSync({
-    mapRef, stations, selId, linkSrc, coveragePolygons,
+    mapRef, stations, selId, linkSrc, coveragePolygons, coverageDiagnostics,
     removeStation, selectStation, startLink, completeLink, fetchStationElevation,
   })
   useLinkSync({ mapRef, links, stations, terrainLinkStats })

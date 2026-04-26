@@ -16,8 +16,9 @@ export interface Building {
 // ── Spatial grid pentru raycasting rapid ───────────────────────────────────
 
 interface GridCell {
-  // Segmente de perete pre-calculate: [ax, ay, bx, by, height]
-  segments: [number, number, number, number, number][];
+  // Segmente de perete pre-calculate:
+  // [ax, ay, bx, by, height, buildingIdx, segmentIdx]
+  segments: [number, number, number, number, number, number, number][];
 }
 
 function buildGrid(
@@ -30,10 +31,12 @@ function buildGrid(
   const kmPerLng = 111.32 * Math.cos((stationLat * Math.PI) / 180);
 
   const grid = new Map<string, GridCell>();
+  let segmentCounter = 0;
 
-  for (const b of buildings) {
-    const { ring, height } = b;
+  for (let buildingIdx = 0; buildingIdx < buildings.length; buildingIdx++) {
+    const { ring, height } = buildings[buildingIdx];
     for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const segmentIdx = segmentCounter++;
       const ax = (ring[j][1] - stationLng) * kmPerLng;
       const ay = (ring[j][0] - stationLat) * kmPerLat;
       const bx = (ring[i][1] - stationLng) * kmPerLng;
@@ -48,7 +51,9 @@ function buildGrid(
         for (let cx = cMinX; cx <= cMaxX; cx++) {
           const key = `${cx},${cy}`;
           if (!grid.has(key)) grid.set(key, { segments: [] });
-          grid.get(key)!.segments.push([ax, ay, bx, by, height]);
+          grid.get(key)!.segments.push([
+            ax, ay, bx, by, height, buildingIdx, segmentIdx,
+          ]);
         }
       }
     }
@@ -77,21 +82,27 @@ function raySegmentT(
   return null;
 }
 
-function findClosestBuildingOnRay(
+interface BuildingRayHit {
+  distanceKm: number;
+  buildingIdx: number;
+  height: number;
+}
+
+/**
+ * Returnează TOATE intersecțiile razei cu pereții clădirilor, sortate ascendent
+ * după distanță. Folosit pentru calculul corect al înălțimii clădirii la fiecare
+ * sample (parity counting per buildingIdx → "în interior" / "în afară").
+ */
+function findAllBuildingHitsOnRay(
   bearingDeg: number,
   maxKm: number,
   grid: Map<string, GridCell>,
-  kmPerLat: number,
-  kmPerLng: number,
   cellSizeKm: number,
-): { distanceKm: number; height: number } | null {
-  void kmPerLat; // kept for signature symmetry
-  void kmPerLng;
+): BuildingRayHit[] {
   const bearingRad = (bearingDeg * Math.PI) / 180;
   const dx = Math.sin(bearingRad);
   const dy = Math.cos(bearingRad);
 
-  // DDA — traversează doar celulele de pe traseul razei
   let cx = 0,
     cy = 0;
   const stepX = dx > 0 ? 1 : -1;
@@ -101,9 +112,10 @@ function findClosestBuildingOnRay(
   let tMaxX = Math.abs((dx > 0 ? cellSizeKm : 0) / dx);
   let tMaxY = Math.abs((dy > 0 ? cellSizeKm : 0) / dy);
 
-  let closestT: number | null = null;
-  let closestHeight = 0;
   const visited = new Set<string>();
+  // Dedupe segmente — același perete poate fi vizitat din celule diferite.
+  const seenSegments = new Set<number>();
+  const hits: BuildingRayHit[] = [];
 
   while (Math.min(tMaxX, tMaxY) <= maxKm) {
     const key = `${cx},${cy}`;
@@ -111,14 +123,21 @@ function findClosestBuildingOnRay(
       visited.add(key);
       const cell = grid.get(key);
       if (cell) {
-        for (const [ax, ay, bx, by, height] of cell.segments) {
+        for (const seg of cell.segments) {
+          const segmentIdx = seg[6];
+          if (seenSegments.has(segmentIdx)) continue;
+          const ax = seg[0],
+            ay = seg[1],
+            bx = seg[2],
+            by = seg[3],
+            height = seg[4],
+            buildingIdx = seg[5];
           const t = raySegmentT(dx, dy, ax, ay, bx, by);
-          if (t !== null && t <= maxKm && (closestT === null || t < closestT)) {
-            closestT = t;
-            closestHeight = height;
+          if (t !== null && t >= 0 && t <= maxKm) {
+            seenSegments.add(segmentIdx);
+            hits.push({ distanceKm: t, buildingIdx, height });
           }
         }
-        if (closestT !== null && closestT < Math.min(tMaxX, tMaxY)) break;
       }
     }
 
@@ -131,9 +150,8 @@ function findClosestBuildingOnRay(
     }
   }
 
-  return closestT !== null
-    ? { distanceKm: closestT, height: closestHeight }
-    : null;
+  hits.sort((a, b) => a.distanceKm - b.distanceKm);
+  return hits;
 }
 
 // ── SQLite backend ─────────────────────────────────────────────────────────
@@ -340,66 +358,90 @@ export async function fetchBuildingsInBbox(
 }
 
 /**
- * Augmentează elevațiile de teren cu obstacole clădiri.
- * Folosește spatial grid + DDA raycasting — 5-10× mai rapid decât versiunea anterioară.
+ * Calculează înălțimea clădirii (în metri) la fiecare sample point al razelor
+ * de coverage. Returnează un array paralel cu `points` care conține:
+ *  - 0  → sample-ul NU este în interiorul niciunei clădiri
+ *  - h  → înălțimea celei mai înalte clădiri în care se află sample-ul
+ *
+ * Folosește parity counting pe wall-crossings (raycasting clasic):
+ * dacă numărul de pereți traversați pentru o clădire `i` (înainte de sample)
+ * este impar, sample-ul e în interiorul polygon-ului acelei clădiri.
+ *
+ * Spre deosebire de varianta anterioară (`+9999` magic offset, doar prima
+ * clădire / rază), această funcție:
+ *  - tratează corect orașe dense cu clădiri suprapuse pe aceeași rază
+ *  - permite LOS-ului să "sară peste" clădiri scunde dacă antena e suficient de înaltă
+ *  - oferă obstacle MSL real ( terrain + buildingHeight ) pentru fiecare sample
  */
-export function augmentElevationsWithBuildings(
+export function computeBuildingHeightsAlongRays(
   stationLat: number,
   stationLng: number,
   points: { lat: number; lng: number }[],
-  terrainElevations: number[],
   buildings: Building[],
 ): number[] {
-  if (buildings.length === 0) return terrainElevations;
+  const numBearings: number = COVERAGE_BEARINGS;
+  const samplesPerBearing: number = COVERAGE_SAMPLES;
+  const totalSamples = numBearings * samplesPerBearing;
 
-  const numBearings = COVERAGE_BEARINGS;
-  const samplesPerBearing = COVERAGE_SAMPLES;
-  if (samplesPerBearing === 0) return terrainElevations;
-  if (points.length !== numBearings * samplesPerBearing) return terrainElevations;
+  const result = new Array<number>(points.length).fill(0);
+  if (buildings.length === 0) return result;
+  if (samplesPerBearing === 0) return result;
+  if (points.length !== totalSamples) return result;
 
   const CELL_SIZE_KM = 0.05; // 50m — echilibru overhead grid vs celule verificate
 
-  const { grid, kmPerLat, kmPerLng } = buildGrid(
-    buildings,
-    stationLat,
-    stationLng,
-    CELL_SIZE_KM,
-  );
+  const { grid } = buildGrid(buildings, stationLat, stationLng, CELL_SIZE_KM);
 
-  const result = [...terrainElevations];
+  const kmPerLat = 111.32;
+  const kmPerLng = 111.32 * Math.cos((stationLat * Math.PI) / 180);
+
+  // Reused per-bearing buffers
+  const sampleDistancesKm = new Array<number>(samplesPerBearing);
 
   for (let bearingIndex = 0; bearingIndex < numBearings; bearingIndex++) {
     const bearingDeg = bearingIndex * (360 / numBearings);
-    const lastIdx = bearingIndex * samplesPerBearing + samplesPerBearing - 1;
-    const lastPt = points[lastIdx];
-    const dXlast = (lastPt.lat - stationLat) * 111.32;
-    const dYlast =
-      (lastPt.lng - stationLng) *
-      111.32 *
-      Math.cos((stationLat * Math.PI) / 180);
-    const maxKm = Math.sqrt(dXlast * dXlast + dYlast * dYlast);
 
-    const hit = findClosestBuildingOnRay(
+    let maxKm = 0;
+    for (let s = 0; s < samplesPerBearing; s++) {
+      const pt = points[bearingIndex * samplesPerBearing + s];
+      const dX = (pt.lat - stationLat) * kmPerLat;
+      const dY = (pt.lng - stationLng) * kmPerLng;
+      const distKm = Math.sqrt(dX * dX + dY * dY);
+      sampleDistancesKm[s] = distKm;
+      if (distKm > maxKm) maxKm = distKm;
+    }
+
+    const hits = findAllBuildingHitsOnRay(
       bearingDeg,
       maxKm,
       grid,
-      kmPerLat,
-      kmPerLng,
       CELL_SIZE_KM,
     );
-    if (!hit) continue;
+    if (hits.length === 0) continue;
 
-    for (let sampleIdx = 0; sampleIdx < samplesPerBearing; sampleIdx++) {
-      const pointIdx = bearingIndex * samplesPerBearing + sampleIdx;
-      const pt = points[pointIdx];
-      const dX = (pt.lat - stationLat) * 111.32;
-      const dY =
-        (pt.lng - stationLng) * 111.32 * Math.cos((stationLat * Math.PI) / 180);
-      const distKm = Math.sqrt(dX * dX + dY * dY);
+    // Parity-count per buildingIdx, slide forward together with sample distance.
+    const insideCount = new Map<number, number>();
+    const insideHeight = new Map<number, number>();
+    let hitIdx = 0;
 
-      if (distKm >= hit.distanceKm) {
-        result[pointIdx] = terrainElevations[pointIdx] + hit.height + 9999;
+    for (let s = 0; s < samplesPerBearing; s++) {
+      const d = sampleDistancesKm[s];
+      while (hitIdx < hits.length && hits[hitIdx].distanceKm <= d) {
+        const h = hits[hitIdx];
+        const cnt = (insideCount.get(h.buildingIdx) ?? 0) + 1;
+        insideCount.set(h.buildingIdx, cnt);
+        insideHeight.set(h.buildingIdx, h.height);
+        hitIdx++;
       }
+
+      let maxH = 0;
+      insideCount.forEach((cnt, bIdx) => {
+        if ((cnt & 1) === 1) {
+          const bH = insideHeight.get(bIdx) ?? 0;
+          if (bH > maxH) maxH = bH;
+        }
+      });
+      result[bearingIndex * samplesPerBearing + s] = maxH;
     }
   }
 

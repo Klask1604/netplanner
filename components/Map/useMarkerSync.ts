@@ -10,6 +10,9 @@ interface UseMarkerSyncProps {
   selId:             number | null
   linkSrc:           number | null
   coveragePolygons:  Record<number, CoveragePolygons>
+  coverageDiagnostics: Record<number, {
+    buildingUnderStation?: { detected: boolean; height: number }
+  }>
   removeStation:     (id: number) => void
   selectStation:     (id: number | null) => void
   startLink:         (id: number) => void
@@ -48,7 +51,7 @@ function coverageBoundaryRing(
 }
 
 export function useMarkerSync({
-  mapRef, stations, selId, linkSrc, coveragePolygons,
+  mapRef, stations, selId, linkSrc, coveragePolygons, coverageDiagnostics,
   removeStation, selectStation, startLink, completeLink, fetchStationElevation,
 }: UseMarkerSyncProps) {
   const markerRefs = useRef<Record<number, any>>({})
@@ -79,7 +82,11 @@ export function useMarkerSync({
           if (!markerRefs.current[st.id]) {
             // ── Create new marker ──
             const markerElement = document.createElement('div')
-            markerElement.innerHTML = makeIconHTML(st.type, isSelected, isLinkSource)
+            const markerDiagnostic = coverageDiagnostics[st.id]?.buildingUnderStation
+            markerElement.innerHTML = makeIconHTML(st.type, isSelected, isLinkSource, {
+              isOnBuilding: markerDiagnostic?.detected ?? false,
+              buildingHeightM: markerDiagnostic?.height ?? 0,
+            })
 
             markerElement.addEventListener('click', (e) => {
               e.stopPropagation()
@@ -110,7 +117,11 @@ export function useMarkerSync({
             const marker       = markerRefs.current[st.id]
             marker.setLngLat([st.lng, st.lat])
             const markerElement = marker.getElement()
-            markerElement.innerHTML = makeIconHTML(st.type, isSelected, isLinkSource)
+            const markerDiagnostic = coverageDiagnostics[st.id]?.buildingUnderStation
+            markerElement.innerHTML = makeIconHTML(st.type, isSelected, isLinkSource, {
+              isOnBuilding: markerDiagnostic?.detected ?? false,
+              buildingHeightM: markerDiagnostic?.height ?? 0,
+            })
           }
         })
 
@@ -135,5 +146,5 @@ export function useMarkerSync({
     }, 50)
 
     return () => clearInterval(interval)
-  }, [stations, selId, linkSrc, coveragePolygons])
+  }, [stations, selId, linkSrc, coveragePolygons, coverageDiagnostics])
 }

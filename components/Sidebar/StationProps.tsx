@@ -119,9 +119,35 @@ export default function StationProps() {
           <span>{coverageDiag?.buildingsCount ?? 0}</span>
         </div>
         <div className={styles.coverageValidationRow}>
-          <span>Sample-uri blocate</span>
+          <span>Sample-uri in cladiri</span>
           <span>{coverageDiag?.blockedSamples ?? 0}/{coverageDiag?.totalSamples ?? 0}</span>
         </div>
+        <div className={styles.coverageValidationRow}>
+          <span>Rezolutie</span>
+          <span>{coverageDiag?.samplesUsed?.toLocaleString() ?? '—'} samples</span>
+        </div>
+        <div className={styles.coverageValidationRow}>
+          <span>Bearings obstructionate</span>
+          <span>
+            {coverageDiag?.obstructedBearings ?? 0}/{coverageDiag?.totalBearings ?? 0}
+          </span>
+        </div>
+        <div className={styles.coverageValidationRow}>
+          <span>Distanta medie obstructie</span>
+          <span>
+            {coverageDiag?.meanObstructionKm != null
+              ? `${(coverageDiag.meanObstructionKm * 1000).toFixed(0)} m`
+              : '—'}
+          </span>
+        </div>
+        {coverageDiag?.buildingUnderStation?.detected && (
+          <div className={styles.coverageValidationRow}>
+            <span>Cladire sub statie</span>
+            <span style={{ color: 'var(--green)' }}>
+              +{coverageDiag.buildingUnderStation.height.toFixed(0)} m roof
+            </span>
+          </div>
+        )}
         <button
           className={styles.recomputeCoverageBtn}
           onClick={() => fetchStationElevation(station.id)}
@@ -184,7 +210,7 @@ export default function StationProps() {
       {isPending && (
         <div className={styles.pendingHint}>
           <span className={styles.pendingSpinner} />
-          Calcul coverage cu teren + cladiri...
+          Calcul HD coverage (28 800 samples)...
         </div>
       )}
 

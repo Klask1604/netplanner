@@ -10,12 +10,44 @@ const STATION_SVGS: Record<StationType, string> = {
   repeater: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 7 9 3 5 7l4 4"></path><path d="m17 11 4 4-4 4-4-4"></path><path d="m8 12 4 4 6-6-4-4Z"></path><path d="m16 8 3-3"></path><path d="M9 21a6 6 0 0 0-6-6"></path></svg>`,
 }
 
-export function makeIconHTML(type: StationType, selected: boolean, blinking: boolean): string {
+interface MarkerVisualOptions {
+  isOnBuilding?: boolean
+  buildingHeightM?: number
+}
+
+export function makeIconHTML(
+  type: StationType,
+  selected: boolean,
+  blinking: boolean,
+  options?: MarkerVisualOptions,
+): string {
   const cfg = STATION_TYPES[type]
   const bw = selected ? '3px' : '2px'
   const glow = selected
     ? `0 0 18px ${cfg.color}, 0 0 36px ${cfg.color}55, 0 2px 10px #000a`
     : `0 0 8px ${cfg.color}77, 0 2px 6px #0008`
+
+  if (type === 'antenna') {
+    const isOnBuilding = !!options?.isOnBuilding
+    const buildingHeightM = Math.max(0, Math.round(options?.buildingHeightM ?? 0))
+    const mastHeight = isOnBuilding ? 16 : 8
+    const baseClass = isOnBuilding ? 'marker3d-base roof' : 'marker3d-base ground'
+    const placementLabel = isOnBuilding
+      ? `ROOF${buildingHeightM > 0 ? ` +${buildingHeightM}m` : ''}`
+      : 'GROUND'
+
+    return `<div class="marker3d-wrap ${blinking ? 'blinking' : ''}" style="color:${cfg.color}">
+      <div class="marker3d-mast" style="height:${mastHeight}px"></div>
+      <div class="marker3d-core" style="
+        border:${bw} solid ${cfg.color};
+        box-shadow:${glow};
+      ">${STATION_SVGS[type]}</div>
+      <div class="${baseClass}"></div>
+      <div class="marker3d-label">${placementLabel}</div>
+      <div class="marker3d-badge ${isOnBuilding ? 'roof' : 'ground'}">${isOnBuilding ? 'R' : 'G'}</div>
+    </div>`
+  }
+
   return `<div class="${blinking ? 'blinking' : ''}" style="
     width:32px;height:32px;border-radius:50%;
     border:${bw} solid ${cfg.color};background:#0d1420;

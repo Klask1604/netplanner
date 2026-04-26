@@ -25,8 +25,13 @@ interface NetStore {
     buildingsUsed: boolean
     buildingsCount: number
     buildingsSource: 'client' | 'server' | 'none'
+    buildingUnderStation?: { detected: boolean; height: number }
     blockedSamples: number
     totalSamples: number
+    samplesUsed?: number
+    obstructedBearings?: number
+    totalBearings?: number
+    meanObstructionKm?: number | null
   }>
   polygonPending:    Record<number, boolean>
   terrainLinkStats:  Record<number, LinkStats>
