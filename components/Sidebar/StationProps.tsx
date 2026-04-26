@@ -12,6 +12,7 @@ export default function StationProps() {
   const {
     selId, stations, links, updateStation, removeStation, removeLink, selectStation,
     polygonPending, coverageDiagnostics, fetchStationElevation,
+    diagnosticMode, coverageRays,
   } = useNetStore()
   const station = stations.find(s => s.id === selId)
   if (!station) return null
@@ -145,6 +146,21 @@ export default function StationProps() {
             <span>Cladire sub statie</span>
             <span style={{ color: 'var(--green)' }}>
               +{coverageDiag.buildingUnderStation.height.toFixed(0)} m roof
+            </span>
+          </div>
+        )}
+        {diagnosticMode && (
+          <div
+            className={styles.diagnosticHint}
+            title={
+              (coverageRays[station.id]?.length ?? 0) > 0
+                ? `${coverageRays[station.id].length} raze afisate pe harta`
+                : 'Razele apar dupa primul calcul de coverage'
+            }
+          >
+            <span className={styles.diagnosticHintDot} />
+            <span>
+              MOD DIAGNOSTIC ACTIV — {coverageRays[station.id]?.length ?? 0} raze pe harta (hover pentru detalii)
             </span>
           </div>
         )}

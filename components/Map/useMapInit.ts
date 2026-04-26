@@ -96,11 +96,12 @@ export function useMapInit({ addStation, selectStation }: UseMapInitProps) {
         })
 
         // ── GeoJSON sources ──────────────────────────────────────────────────
-        map.addSource('station-rings', { type: 'geojson', data: EMPTY_FC })
-        map.addSource('links',         { type: 'geojson', data: EMPTY_FC })
-        map.addSource('coverage',      { type: 'geojson', data: EMPTY_FC })
-        map.addSource('relay',         { type: 'geojson', data: EMPTY_FC })
-        map.addSource('buildings',     { type: 'geojson', data: EMPTY_FC })
+        map.addSource('station-rings',   { type: 'geojson', data: EMPTY_FC })
+        map.addSource('links',           { type: 'geojson', data: EMPTY_FC })
+        map.addSource('coverage',        { type: 'geojson', data: EMPTY_FC })
+        map.addSource('relay',           { type: 'geojson', data: EMPTY_FC })
+        map.addSource('buildings',       { type: 'geojson', data: EMPTY_FC })
+        map.addSource('diagnostic-rays', { type: 'geojson', data: EMPTY_FC })
 
         // ── 3D buildings from OSM (fill-extrusion, toggled externally) ─────────
         map.addLayer({
@@ -161,6 +162,42 @@ export function useMapInit({ addStation, selectStation }: UseMapInitProps) {
             'line-width':     1.5,
             'line-opacity':   0.35,
             'line-dasharray': [3, 5],
+          },
+        })
+
+        // ── Diagnostic LOS rays (per-bearing visualization) ──────────────────
+        map.addLayer({
+          id:     'diagnostic-rays-line',
+          type:   'line',
+          source: 'diagnostic-rays',
+          filter: ['==', ['geometry-type'], 'LineString'],
+          paint: {
+            'line-color': [
+              'case',
+              ['==', ['get', 'status'], 'blocked'],
+              '#ff5252',
+              '#37ff8b',
+            ],
+            'line-width':   1.4,
+            'line-opacity': 0.7,
+          },
+        })
+
+        map.addLayer({
+          id:     'diagnostic-rays-edge',
+          type:   'circle',
+          source: 'diagnostic-rays',
+          filter: [
+            'all',
+            ['==', ['geometry-type'], 'Point'],
+            ['==', ['get', 'status'], 'blocked'],
+          ],
+          paint: {
+            'circle-color':        '#ff5252',
+            'circle-radius':       3.5,
+            'circle-stroke-color': '#ffffff',
+            'circle-stroke-width': 1,
+            'circle-opacity':      0.95,
           },
         })
 

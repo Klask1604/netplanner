@@ -8,6 +8,7 @@ import { useLinkSync } from './useLinkSync'
 import { useHeatmapLayer } from './useHeatmapLayer'
 import { useTerrainLayer } from './useTerrainLayer'
 import { useBuildingLayer } from './useBuildingLayer'
+import { useDiagnosticRaysLayer } from './useDiagnosticRaysLayer'
 import LinkModeHint from './LinkModeHint'
 import HeatmapLegend from './HeatmapLegend'
 import TopoLegend from './TopoLegend'
@@ -19,6 +20,7 @@ export default function MapView() {
     coverageDiagnostics,
     coverageOpacity,
     hillshadeVisible, terrain3dEnabled, topoMapEnabled, buildingsVisible,
+    diagnosticMode, coverageRays,
     addStation, removeStation, selectStation, startLink, completeLink, fetchStationElevation,
   } = useNetStore()
 
@@ -34,6 +36,7 @@ export default function MapView() {
   })
   useTerrainLayer({ mapRef, hillshadeVisible, terrain3dEnabled, topoMapEnabled })
   useBuildingLayer({ mapRef, buildingsVisible })
+  useDiagnosticRaysLayer({ mapRef, selId, diagnosticMode, stations, coverageRays })
 
   // Update canvas cursor when placing-tool is active
   useEffect(() => {

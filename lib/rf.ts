@@ -736,9 +736,30 @@ export interface CoverageRawDiagnostics {
   meanObstructionKm: number | null;
 }
 
+/**
+ * Per-bearing diagnostic data emitted alongside the coverage polygons.
+ * Used by the client diagnostic ray overlay to render a 360-line "x-ray" view
+ * proving the LOS computation matches the rendered polygon.
+ */
+export interface BearingDiagnostic {
+  bearingDeg: number;
+  /** Distance along bearing where line-of-sight was blocked (km), null = clear. */
+  obstructedAtKm: number | null;
+  /** Raw 0 dB radius used for this bearing BEFORE polygon smoothing (km). */
+  effectiveRadiusKm: number;
+  /** Tip of the ray (visible coverage edge along this bearing). */
+  edgeLat: number;
+  edgeLng: number;
+  /** Building height (m) at the obstructing sample (0 when clear or terrain-only). */
+  edgeBuildingHeight: number;
+  /** Terrain MSL (m) at the obstructing sample (or farthest sample when clear). */
+  edgeTerrainElevation: number;
+}
+
 export interface TerrainCoverageResult {
   polygons: CoveragePolygons;
   diagnostics: CoverageRawDiagnostics;
+  bearings: BearingDiagnostic[];
 }
 
 /**
@@ -770,6 +791,7 @@ export function terrainCoveragePolygon(
 
   // Pre-compute LOS analysis once per bearing (independent of margin band).
   const bearingDegs: number[] = [];
+  const bearingIndices: number[] = [];
   const obstructedAtKmList: (number | null)[] = [];
   const effectiveHeightList: number[] = [];
 
@@ -795,8 +817,23 @@ export function terrainCoveragePolygon(
     );
 
     bearingDegs.push(bearingDeg);
+    bearingIndices.push(bearingIndex);
     obstructedAtKmList.push(obstructedAtKm);
     effectiveHeightList.push(effectiveHeight);
+  }
+
+  // Per-bearing raw 0 dB radius (used for diagnostic rays — pre-smoothing).
+  const rawEffectiveRadiusKm: number[] = new Array(bearingDegs.length);
+  for (let i = 0; i < bearingDegs.length; i++) {
+    const obstructedAtKm = obstructedAtKmList[i];
+    const effectiveHeight = effectiveHeightList[i];
+    rawEffectiveRadiusKm[i] =
+      obstructedAtKm !== null
+        ? obstructedAtKm
+        : Math.min(
+            okumuraHata({ ...station, height: effectiveHeight }),
+            flatRadiusKm,
+          );
   }
 
   // Per-bearing smoothing thresholds tuned for the 1°/360-bearing grid.
@@ -885,7 +922,50 @@ export function terrainCoveragePolygon(
         : null,
   };
 
-  return { polygons, diagnostics };
+  // Build per-bearing diagnostic objects (used by the client ray overlay).
+  const bearings: BearingDiagnostic[] = new Array(bearingDegs.length);
+  for (let i = 0; i < bearingDegs.length; i++) {
+    const bearingDeg = bearingDegs[i];
+    const bearingIndex = bearingIndices[i];
+    const obstructedAtKm = obstructedAtKmList[i];
+    const effectiveRadiusKm = rawEffectiveRadiusKm[i];
+
+    // Identify the sample at (or just past) the obstruction edge so we can
+    // surface the building height + terrain elevation that caused the block.
+    const sliceStart = bearingIndex * COVERAGE_SAMPLES;
+    const farSampleIdx = COVERAGE_SAMPLES - 1;
+    let edgeSampleIdx: number;
+    if (obstructedAtKm !== null && flatRadiusKm > 0) {
+      const fraction = obstructedAtKm / flatRadiusKm;
+      edgeSampleIdx = Math.min(
+        farSampleIdx,
+        Math.max(0, Math.floor(fraction * COVERAGE_SAMPLES)),
+      );
+    } else {
+      edgeSampleIdx = farSampleIdx;
+    }
+    const sampleAbsIdx = sliceStart + edgeSampleIdx;
+
+    const [edgeLat, edgeLng] = destinationPoint(
+      station.lat,
+      station.lng,
+      bearingDeg,
+      effectiveRadiusKm,
+    );
+
+    bearings[i] = {
+      bearingDeg,
+      obstructedAtKm,
+      effectiveRadiusKm,
+      edgeLat,
+      edgeLng,
+      edgeBuildingHeight:
+        obstructedAtKm !== null ? buildingHeights[sampleAbsIdx] ?? 0 : 0,
+      edgeTerrainElevation: terrainElevations[sampleAbsIdx] ?? 0,
+    };
+  }
+
+  return { polygons, diagnostics, bearings };
 }
 
 /**

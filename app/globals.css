@@ -214,3 +214,34 @@ body {
 .fade-in {
   animation: fadeIn 0.2s ease;
 }
+
+/* Diagnostic ray hover popup */
+.diagnostic-ray-popup .maplibregl-popup-content {
+  background: rgba(8, 14, 24, 0.95);
+  border: 1px solid var(--border2);
+  border-radius: 4px;
+  padding: 8px 10px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  color: var(--text);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+}
+.diagnostic-ray-popup .maplibregl-popup-tip {
+  border-top-color: rgba(8, 14, 24, 0.95) !important;
+  border-bottom-color: rgba(8, 14, 24, 0.95) !important;
+}
+.diagnostic-ray-popup .ray-popup-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  line-height: 1.5;
+}
+.diagnostic-ray-popup .ray-popup-row span {
+  color: var(--dim);
+}
+.diagnostic-ray-popup .ray-popup-row b.blocked {
+  color: #ff5252;
+}
+.diagnostic-ray-popup .ray-popup-row b.clear {
+  color: #37ff8b;
+}

@@ -1,5 +1,5 @@
 'use client'
-import { Info, FlaskConical } from 'lucide-react'
+import { Info, FlaskConical, Radar } from 'lucide-react'
 import { useNetStore } from '@/store/netStore'
 import { STATION_TYPES, ToolType } from '@/lib/rf'
 import styles from './TopBar.module.css'
@@ -21,6 +21,7 @@ export default function TopBar({ onInfoOpen, onCalcDebugOpen }: TopBarProps) {
     hillshadeVisible, toggleHillshade, terrain3dEnabled, toggleTerrain3d,
     topoMapEnabled, toggleTopoMap,
     buildingsVisible, toggleBuildings,
+    diagnosticMode, toggleDiagnosticMode,
   } = useNetStore()
 
   return (
@@ -78,6 +79,14 @@ export default function TopBar({ onInfoOpen, onCalcDebugOpen }: TopBarProps) {
           title="Teren 3D (înclinare hartă)"
         >
           3D
+        </button>
+        <button
+          className={`${styles.toggleBtn} ${diagnosticMode ? styles.toggleBtnActive : ''}`}
+          onClick={toggleDiagnosticMode}
+          title="Diagnostic mode: arată toate razele LOS pentru stația selectată"
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
+        >
+          <Radar size={12} strokeWidth={1.75} /> DIAG
         </button>
         <button className={styles.infoBtn} onClick={onCalcDebugOpen} title="Validare Calcule RF" style={{ color: 'var(--cyan)' }}>
           <FlaskConical size={14} strokeWidth={1.75} />

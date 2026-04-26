@@ -6,6 +6,7 @@ import {
   StationType,
   ToolType,
   CoveragePolygons,
+  BearingDiagnostic,
   STATION_TYPES,
   okumuraHata,
   freeSpaceRadius,
@@ -35,12 +36,14 @@ interface NetStore {
   }>
   polygonPending:    Record<number, boolean>
   terrainLinkStats:  Record<number, LinkStats>
+  coverageRays:      Record<number, BearingDiagnostic[]>
   heatmapVisible:    boolean
   coverageOpacity:   number
   hillshadeVisible:  boolean
   terrain3dEnabled:  boolean
   topoMapEnabled:    boolean
   buildingsVisible:  boolean
+  diagnosticMode:    boolean
 
   // ── Actions ────────────────────────────────────────────────────────────────
   setTool:               (tool: ToolType) => void
@@ -64,6 +67,7 @@ interface NetStore {
   toggleTerrain3d:       () => void
   toggleTopoMap:         () => void
   toggleBuildings:       () => void
+  toggleDiagnosticMode:  () => void
   /** Fetch terrain + compute coverage polygon for a station via /api/coverage */
   fetchStationElevation: (stationId: number) => Promise<void>
   /** Compute terrain-aware link budget via /api/link-budget */
@@ -95,12 +99,14 @@ export const useNetStore = create<NetStore>((set, get) => ({
   coverageDiagnostics: {},
   polygonPending:   {},
   terrainLinkStats: {},
+  coverageRays:     {},
   heatmapVisible:   false,
   coverageOpacity:  1,
   hillshadeVisible:  false,
   terrain3dEnabled:  false,
   topoMapEnabled:    false,
   buildingsVisible:  false,
+  diagnosticMode:    false,
 
   // ── Tool ───────────────────────────────────────────────────────────────────
   setTool: (tool) => set({ tool, linkSrc: null }),
@@ -126,6 +132,7 @@ export const useNetStore = create<NetStore>((set, get) => ({
       const { [id]: _rp, ...remainingPolygons } = s.coveragePolygons
       const { [id]: _rd, ...remainingDiagnostics } = s.coverageDiagnostics
       const { [id]: _pp, ...remainingPending  } = s.polygonPending
+      const { [id]: _rr, ...remainingRays }   = s.coverageRays
       const affectedLinkIds = s.links
         .filter(link => link.station1Id === id || link.station2Id === id)
         .map(link => link.id)
@@ -140,6 +147,7 @@ export const useNetStore = create<NetStore>((set, get) => ({
         coverageDiagnostics: remainingDiagnostics,
         polygonPending:   remainingPending,
         terrainLinkStats: remainingBudgets,
+        coverageRays:     remainingRays,
       }
     }),
 
@@ -240,6 +248,7 @@ export const useNetStore = create<NetStore>((set, get) => ({
         stations: recomputedStations, links,
         selId: null, linkSrc: null,
         coveragePolygons: {}, coverageDiagnostics: {}, terrainLinkStats: {},
+        coverageRays: {},
       })
       recomputedStations.forEach((st: Station) => get().fetchStationElevation(st.id))
       links.forEach((l: Link) => get().recomputeLinkTerrain(l.id))
@@ -272,6 +281,7 @@ export const useNetStore = create<NetStore>((set, get) => ({
       get().stations.forEach(s => get().fetchStationElevation(s.id))
     }
   },
+  toggleDiagnosticMode: () => set(s => ({ diagnosticMode: !s.diagnosticMode })),
 
   // ── Async terrain computation (via Next.js API routes) ────────────────────
 
@@ -296,7 +306,7 @@ export const useNetStore = create<NetStore>((set, get) => ({
         body:    JSON.stringify({ station }),
       })
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
-      const { elevation, polygons, diagnostics } = await response.json()
+      const { elevation, polygons, diagnostics, bearings } = await response.json()
 
       set(s => ({
         stations: s.stations.map(st =>
@@ -312,6 +322,10 @@ export const useNetStore = create<NetStore>((set, get) => ({
             blockedSamples: 0,
             totalSamples: 0,
           },
+        },
+        coverageRays: {
+          ...s.coverageRays,
+          [stationId]: (bearings as BearingDiagnostic[] | undefined) ?? [],
         },
         polygonPending:   { ...s.polygonPending,   [stationId]: false },
       }))
