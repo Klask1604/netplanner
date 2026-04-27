@@ -51,9 +51,12 @@ export function useLinkSync({ mapRef, links, stations, terrainLinkStats }: UseLi
         })
 
         map.on('click', 'links', (e: any) => {
+          // Stop propagation so the map's general click handler doesn't immediately
+          // deselect what we're about to select.
+          e.originalEvent?.stopPropagation()
           const f = e.features?.[0]
           if (f) {
-            useNetStore.getState().removeLink(Number(f.properties.linkId))
+            useNetStore.getState().selectLink(Number(f.properties.linkId))
           }
         })
       })
@@ -78,9 +81,10 @@ export function useLinkSync({ mapRef, links, stations, terrainLinkStats }: UseLi
         const stats  = terrainLinkStats[link.id] ?? linkBudget(s1, s2)
         const hasTerrain = !!terrainLinkStats[link.id]
 
-        // Color: green=ok, orange=obstructed but margin ok, red=link down
+        // Color: green=ok, orange=obstructed/freq-mismatch, red=link down
         let color = stats.ok ? '#00ff88' : '#ff3860'
         if (stats.ok && stats.losObstructed) color = '#ffaa00'
+        if (stats.frequencyMismatch) color = '#ffaa00'
 
         const terrainLine = hasTerrain
           ? `Terrain loss: ${stats.diffractionLoss.toFixed(1)} dB` +
@@ -104,6 +108,7 @@ export function useLinkSync({ mapRef, links, stations, terrainLinkStats }: UseLi
               `FSPL: ${stats.fspl.toFixed(1)} dB<br>` +
               (terrainLine ? `${terrainLine}<br>` : '') +
               `Rx: ${stats.rxPower.toFixed(1)} dBm · Margin: ${stats.margin.toFixed(1)} dB ${stats.ok ? '✓' : '✗'}<br>` +
+              (stats.frequencyMismatch ? `<span style="color:#ffaa00">⚠ Frecvente incompatibile (${s1.freq} MHz / ${s2.freq} MHz)</span><br>` : '') +
               (stats.ok
                 ? `<b>Arie retea combinata: ${combinedAreaKm2.toFixed(1)} km²</b>`
                 : `<span style="color:#ff3860">Link inactiv — margin insuficient</span>`),

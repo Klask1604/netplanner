@@ -301,6 +301,77 @@ async function fetchFromOverpass(
 // ── Public API ─────────────────────────────────────────────────────────────
 
 /**
+ * Calculează înălțimea clădirii (în metri) la fiecare sample point de-a lungul
+ * unui traseu liniar (link P2P) de la stationLat/Lng spre ultimul punct din array.
+ *
+ * Funcționează identic cu computeBuildingHeightsAlongRays dar pentru un singur
+ * traseu drept, fără structura fixă de 360×80 samples.
+ * Returnează un array paralel cu `points`: 0 dacă sample-ul nu e în nicio clădire,
+ * sau înălțimea clădirii în care se află.
+ */
+export function computeBuildingHeightsAlongPath(
+  stationLat: number,
+  stationLng: number,
+  points: { lat: number; lng: number }[],
+  buildings: Building[],
+): number[] {
+  const result = new Array<number>(points.length).fill(0);
+  if (buildings.length === 0 || points.length === 0) return result;
+
+  const CELL_SIZE_KM = 0.05;
+  const { grid, kmPerLat, kmPerLng } = buildGrid(
+    buildings,
+    stationLat,
+    stationLng,
+    CELL_SIZE_KM,
+  );
+
+  // Compute distance from station1 for each sample point (ordered near→far)
+  const sampleDistancesKm = points.map((pt) => {
+    const dx = (pt.lng - stationLng) * kmPerLng;
+    const dy = (pt.lat - stationLat) * kmPerLat;
+    return Math.sqrt(dx * dx + dy * dy);
+  });
+
+  const maxKm = sampleDistancesKm[sampleDistancesKm.length - 1];
+  if (maxKm < 1e-6) return result;
+
+  // Direction of path: bearing from station1 toward the last sample point.
+  // atan2(east, north) gives the compass bearing in radians.
+  const lastPt = points[points.length - 1];
+  const endX = (lastPt.lng - stationLng) * kmPerLng;
+  const endY = (lastPt.lat - stationLat) * kmPerLat;
+  const bearingDeg = ((Math.atan2(endX, endY) * 180) / Math.PI + 360) % 360;
+
+  const hits = findAllBuildingHitsOnRay(bearingDeg, maxKm, grid, CELL_SIZE_KM);
+  if (hits.length === 0) return result;
+
+  const insideCount = new Map<number, number>();
+  const insideHeight = new Map<number, number>();
+  let hitIdx = 0;
+
+  for (let s = 0; s < points.length; s++) {
+    const d = sampleDistancesKm[s];
+    while (hitIdx < hits.length && hits[hitIdx].distanceKm <= d) {
+      const h = hits[hitIdx];
+      insideCount.set(h.buildingIdx, (insideCount.get(h.buildingIdx) ?? 0) + 1);
+      insideHeight.set(h.buildingIdx, h.height);
+      hitIdx++;
+    }
+    let maxH = 0;
+    insideCount.forEach((cnt, bIdx) => {
+      if ((cnt & 1) === 1) {
+        const bH = insideHeight.get(bIdx) ?? 0;
+        if (bH > maxH) maxH = bH;
+      }
+    });
+    result[s] = maxH;
+  }
+
+  return result;
+}
+
+/**
  * Returnează clădirile din bbox.
  * Prioritate: SQLite local → Overpass fallback.
  * Rezultatele sunt cached in-memory 5 minute.

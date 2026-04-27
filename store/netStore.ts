@@ -11,13 +11,16 @@ import {
   okumuraHata,
   freeSpaceRadius,
   linkBudget,
+  stationsInterfere,
 } from '@/lib/rf'
+import { useToastStore } from './toastStore'
 
 interface NetStore {
   // ── State ──────────────────────────────────────────────────────────────────
   stations:          Station[]
   links:             Link[]
   selId:             number | null
+  selLinkId:         number | null
   tool:              ToolType
   linkSrc:           number | null
   counters:          Record<StationType, number>
@@ -51,6 +54,7 @@ interface NetStore {
   removeStation:         (id: number) => void
   updateStation:         (id: number, patch: Partial<Station>) => void
   selectStation:         (id: number | null) => void
+  selectLink:            (id: number | null) => void
   startLink:             (stationId: number) => void
   completeLink:          (targetStationId: number) => void
   removeLink:            (id: number) => void
@@ -92,6 +96,7 @@ export const useNetStore = create<NetStore>((set, get) => ({
   stations:         [],
   links:            [],
   selId:            null,
+  selLinkId:        null,
   tool:             'select',
   linkSrc:          null,
   counters:         { bts: 0, antenna: 0, router: 0, repeater: 0 },
@@ -160,14 +165,30 @@ export const useNetStore = create<NetStore>((set, get) => ({
     _coverageDebounceTimers[id] = setTimeout(() => get().fetchStationElevation(id), 350)
   },
 
-  selectStation: (id) => set({ selId: id }),
+  selectStation: (id) => set({ selId: id, selLinkId: null }),
+  selectLink:    (id) => set({ selLinkId: id, selId: null }),
 
   // ── Links ──────────────────────────────────────────────────────────────────
   startLink: (stationId) => set({ linkSrc: stationId }),
 
   completeLink: (targetStationId) => {
-    const { linkSrc, links } = get()
+    const { linkSrc, links, stations } = get()
     if (!linkSrc || linkSrc === targetStationId) { set({ linkSrc: null }); return }
+
+    const srcStation = stations.find(s => s.id === linkSrc)
+    const dstStation = stations.find(s => s.id === targetStationId)
+
+    // Two repeaters cannot link to each other — a repeater re-broadcasts a
+    // source signal and has no uplink path to another repeater.
+    if (srcStation?.type === 'repeater' && dstStation?.type === 'repeater') {
+      useToastStore.getState().addToast(
+        'warn',
+        'Link invalid: nu se poate conecta Repeater → Repeater. Un repeater necesită o sursă (BTS / Antenă).',
+      )
+      set({ linkSrc: null })
+      return
+    }
+
     const alreadyExists = links.some(
       l => (l.station1Id === linkSrc && l.station2Id === targetStationId) ||
            (l.station1Id === targetStationId && l.station2Id === linkSrc)
@@ -187,7 +208,11 @@ export const useNetStore = create<NetStore>((set, get) => ({
   removeLink: (id) =>
     set(s => {
       const { [id]: _removed, ...remainingBudgets } = s.terrainLinkStats
-      return { links: s.links.filter(l => l.id !== id), terrainLinkStats: remainingBudgets }
+      return {
+        links: s.links.filter(l => l.id !== id),
+        terrainLinkStats: remainingBudgets,
+        selLinkId: s.selLinkId === id ? null : s.selLinkId,
+      }
     }),
 
   cancelLink: () => set({ linkSrc: null }),
@@ -207,12 +232,9 @@ export const useNetStore = create<NetStore>((set, get) => ({
   getInterferences: (stationId) => {
     const station = get().stations.find(s => s.id === stationId)
     if (!station) return []
-    return get().stations.filter(other => {
-      if (other.id === stationId || other.type !== station.type) return false
-      const dx = (station.lat - other.lat) * 111.32
-      const dy = (station.lng - other.lng) * 111.32 * Math.cos(station.lat * Math.PI / 180)
-      return Math.sqrt(dx * dx + dy * dy) < station.radius + other.radius
-    })
+    return get().stations.filter(
+      other => other.id !== stationId && stationsInterfere(station, other),
+    )
   },
 
   interferenceCount: () => {
@@ -220,11 +242,7 @@ export const useNetStore = create<NetStore>((set, get) => ({
     let count = 0
     for (let i = 0; i < stations.length; i++) {
       for (let j = i + 1; j < stations.length; j++) {
-        const a = stations[i], b = stations[j]
-        if (a.type !== b.type) continue
-        const dx = (a.lat - b.lat) * 111.32
-        const dy = (a.lng - b.lng) * 111.32 * Math.cos(a.lat * Math.PI / 180)
-        if (Math.sqrt(dx * dx + dy * dy) < a.radius + b.radius) count++
+        if (stationsInterfere(stations[i], stations[j])) count++
       }
     }
     return count
@@ -337,6 +355,11 @@ export const useNetStore = create<NetStore>((set, get) => ({
 
     } catch (error) {
       console.warn('Coverage computation failed for station', stationId, error)
+      const stationName = get().stations.find(s => s.id === stationId)?.name ?? `#${stationId}`
+      useToastStore.getState().addToast(
+        'error',
+        `Calculul coverage a eșuat pentru ${stationName}. Verifică conexiunea la internet.`,
+      )
       set(s => ({
         polygonPending: { ...s.polygonPending, [stationId]: false },
         coverageDiagnostics: {
@@ -374,8 +397,27 @@ export const useNetStore = create<NetStore>((set, get) => ({
       const { stats } = await response.json()
 
       set(s => ({ terrainLinkStats: { ...s.terrainLinkStats, [linkId]: stats } }))
+
+      // Warn about frequency mismatch after terrain computation confirms the link
+      if (stats.frequencyMismatch) {
+        const { links: currentLinks, stations: currentStations } = get()
+        const lnk = currentLinks.find(l => l.id === linkId)
+        const s1 = currentStations.find(s => s.id === lnk?.station1Id)
+        const s2 = currentStations.find(s => s.id === lnk?.station2Id)
+        if (s1 && s2) {
+          useToastStore.getState().addToast(
+            'warn',
+            `Frecvențe incompatibile: ${s1.name} (${s1.freq} MHz) ↔ ${s2.name} (${s2.freq} MHz). Linkul nu va funcționa fizic.`,
+            6000,
+          )
+        }
+      }
     } catch (error) {
       console.warn('Link terrain computation failed for link', linkId, error)
+      useToastStore.getState().addToast(
+        'error',
+        'Calculul link budget a eșuat. Verifică conexiunea la internet.',
+      )
     }
   },
 }))

@@ -39,6 +39,7 @@ export interface LinkStats {
   diffractionLoss: number; // dB additional loss from terrain (0 when not computed)
   losObstructed: boolean; // true if terrain physically crosses the LOS line
   beamMisaligned: boolean; // true if either station's directional beam doesn't cover the other
+  frequencyMismatch: boolean; // true if stations operate on incompatible frequency bands (>10% relative diff)
 }
 
 export type StationType = "bts" | "antenna" | "router" | "repeater";
@@ -190,12 +191,7 @@ export function okumuraHataMarginAtDistance(
 
 /** Free-space path loss between two stations (no terrain). */
 export function linkBudget(station1: Station, station2: Station): LinkStats {
-  const deltaX = (station1.lat - station2.lat) * 111.32;
-  const deltaY =
-    (station1.lng - station2.lng) *
-    111.32 *
-    Math.cos((station1.lat * Math.PI) / 180);
-  const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+  const distance = haversineKm(station1.lat, station1.lng, station2.lat, station2.lng);
 
   if (distance < 0.001) {
     return {
@@ -207,6 +203,7 @@ export function linkBudget(station1: Station, station2: Station): LinkStats {
       diffractionLoss: 0,
       losObstructed: false,
       beamMisaligned: false,
+      frequencyMismatch: false,
     };
   }
 
@@ -232,6 +229,7 @@ export function linkBudget(station1: Station, station2: Station): LinkStats {
       diffractionLoss: 0,
       losObstructed: false,
       beamMisaligned: true,
+      frequencyMismatch: false,
     };
   }
 
@@ -243,9 +241,13 @@ export function linkBudget(station1: Station, station2: Station): LinkStats {
   if (involvesRepeater) {
     const source = station1.type === "repeater" ? station2 : station1;
     const receiver = station1.type === "repeater" ? station1 : station2;
-    const margin = okumuraHataMarginAtDistance(source, distance);
-    const pathLoss = source.txPower + source.gain - station2.sens - margin;
-    const rxPower = source.txPower + source.gain - pathLoss + receiver.gain;
+    // okumuraHataMarginAtDistance returns: sourceEIRP - L(dist) - source.sens
+    // Reverse-extract actual Okumura-Hata path loss L, then recompute margin at receiver.
+    const sourceEIRP = source.txPower + source.gain;
+    const sourceMarginAtDist = okumuraHataMarginAtDistance(source, distance);
+    const pathLoss = sourceEIRP - source.sens - sourceMarginAtDist;
+    const rxPower = sourceEIRP - pathLoss + receiver.gain;
+    const margin = rxPower - receiver.sens;
     return {
       distance,
       fspl: pathLoss,
@@ -255,11 +257,16 @@ export function linkBudget(station1: Station, station2: Station): LinkStats {
       diffractionLoss: 0,
       losObstructed: false,
       beamMisaligned: false,
+      frequencyMismatch: false,
     };
   }
 
-  const avgFreq = (station1.freq + station2.freq) / 2;
-  const fspl = 20 * Math.log10(distance) + 20 * Math.log10(avgFreq) + 32.44;
+  // FSPL uses the transmitter (station1) frequency — the signal wavelength is
+  // determined by the transmitter. Flag incompatible bands (>10% relative diff).
+  const frequencyMismatch =
+    Math.abs(station1.freq - station2.freq) / Math.min(station1.freq, station2.freq) > 0.1;
+  const freqMHz = station1.freq;
+  const fspl = 20 * Math.log10(distance) + 20 * Math.log10(freqMHz) + 32.44;
   const rxPower = station1.txPower + station1.gain - fspl + station2.gain;
   const margin = rxPower - station2.sens;
   return {
@@ -271,6 +278,7 @@ export function linkBudget(station1: Station, station2: Station): LinkStats {
     diffractionLoss: 0,
     losObstructed: false,
     beamMisaligned: false,
+    frequencyMismatch,
   };
 }
 
@@ -307,17 +315,21 @@ export function linkSamplePoints(
 }
 
 /**
- * Terrain-aware link budget.
+ * Terrain-aware link budget with optional building obstruction.
  *
- * Applies single knife-edge diffraction at the worst terrain obstruction
- * found along the path profile (ITU-R P.526 method).
+ * Applies single knife-edge diffraction at the worst obstruction found along
+ * the path profile (ITU-R P.526 method). Buildings are treated as additional
+ * height on top of terrain at each sample point.
  *
- * @param pathElevations  Terrain AMSL (m) at each point returned by linkSamplePoints.
+ * @param pathElevations      Terrain AMSL (m) at each point from linkSamplePoints.
+ * @param pathBuildingHeights Building height above terrain (m) at the same points.
+ *                            Omit or pass [] to disable building LOS checks.
  */
 export function terrainLinkBudget(
   station1: Station,
   station2: Station,
   pathElevations: number[],
+  pathBuildingHeights: number[] = [],
 ): LinkStats {
   const base = linkBudget(station1, station2);
   // Short-circuit: co-located stations, no terrain data, or beam not pointed at target
@@ -332,7 +344,7 @@ export function terrainLinkBudget(
   const txAntennaMsl = station1.elevation + station1.height; // antenna tip AMSL (m)
   const rxAntennaMsl = station2.elevation + station2.height;
   const distKm = base.distance;
-  const freqMHz = (station1.freq + station2.freq) / 2;
+  const freqMHz = station1.freq; // Fresnel radius uses transmitter wavelength
   const lambdaKm = 300 / freqMHz; // wavelength in km
 
   let worstFresnelNumber = -Infinity;
@@ -344,7 +356,9 @@ export function terrainLinkBudget(
     const distFromRx = (1 - pathFraction) * distKm;
     const losElevation =
       txAntennaMsl + pathFraction * (rxAntennaMsl - txAntennaMsl); // LOS height at this point (m AMSL)
-    const clearanceM = pathElevations[i] - losElevation; // >0 means terrain above LOS
+    const buildingH = pathBuildingHeights[i] ?? 0;
+    const obstacleMsl = pathElevations[i] + buildingH; // terrain + building top
+    const clearanceM = obstacleMsl - losElevation; // >0 means obstacle above LOS
 
     const fresnelNumber =
       (clearanceM / 1000) *
@@ -371,6 +385,7 @@ export function terrainLinkBudget(
     diffractionLoss: Math.round(diffractionLoss * 10) / 10,
     losObstructed: obstructed,
     beamMisaligned: false,
+    frequencyMismatch: base.frequencyMismatch,
   };
 }
 
@@ -406,6 +421,12 @@ export function stationsInterfere(
   stationB: Station,
 ): boolean {
   if (stationA.type !== stationB.type) return false;
+  // Stations on incompatible frequency bands cannot cause co-channel interference.
+  // Same threshold as frequencyMismatch: >10% relative difference = different band.
+  const freqRatio =
+    Math.abs(stationA.freq - stationB.freq) /
+    Math.min(stationA.freq, stationB.freq);
+  if (freqRatio > 0.1) return false;
   const distance = haversineKm(
     stationA.lat,
     stationA.lng,
@@ -795,11 +816,22 @@ export function terrainCoveragePolygon(
   const obstructedAtKmList: (number | null)[] = [];
   const effectiveHeightList: number[] = [];
 
+  // For directional antennas, start iteration from the LEFT edge of the sector
+  // so bearings are pushed in angular order (left-edge → right-edge).
+  // Without this, a sector straddling 0°/360° (e.g. azimuth=0, bw=65°) would
+  // push bearings 0…32 first and 328…359 last, creating a self-intersecting
+  // polygon (split into thin disconnected slivers).
+  // Omni antennas always start from index 0 — order is irrelevant for circles.
+  const iterStart = isOmnidirectional
+    ? 0
+    : Math.round((((station.azimuth - beamwidthDeg / 2) % 360) + 360) % 360);
+
   for (
-    let bearingIndex = 0;
-    bearingIndex < COVERAGE_BEARINGS;
-    bearingIndex++
+    let i = 0;
+    i < COVERAGE_BEARINGS;
+    i++
   ) {
+    const bearingIndex = (iterStart + i) % COVERAGE_BEARINGS;
     const bearingDeg = bearingIndex * (360 / COVERAGE_BEARINGS);
     if (!bearingInSector(bearingDeg, station.azimuth, beamwidthDeg)) continue;
 

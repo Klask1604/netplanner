@@ -6,6 +6,7 @@ import Toolbar from '@/components/Toolbar/Toolbar'
 import Sidebar from '@/components/Sidebar/Sidebar'
 import InfoModal from '@/components/InfoModal/InfoModal'
 import CalcDebugModal from '@/components/CalcDebug/CalcDebugModal'
+import Toast from '@/components/Toast/Toast'
 
 const MapView = dynamic(() => import('@/components/Map/MapView'), { ssr: false })
 
@@ -29,6 +30,7 @@ export default function Home() {
       </div>
       <InfoModal isOpen={showInfo} onClose={() => setShowInfo(false)} />
       <CalcDebugModal isOpen={showCalcDebug} onClose={() => setShowCalcDebug(false)} />
+      <Toast />
     </>
   )
 }

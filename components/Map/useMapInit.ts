@@ -234,6 +234,7 @@ export function useMapInit({ addStation, selectStation }: UseMapInitProps) {
             addStation(e.lngLat.lat, e.lngLat.lng, activeTool as StationType)
           } else if (activeTool === 'select') {
             selectStation(null)
+            useNetStore.getState().selectLink(null)
           }
         })
 

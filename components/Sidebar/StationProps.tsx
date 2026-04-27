@@ -1,18 +1,25 @@
 'use client'
 import { AlertTriangle, ChevronLeft, Trash2, X, WifiOff } from 'lucide-react'
 import { useNetStore } from '@/store/netStore'
-import { STATION_TYPES, calcEIRP, linkBudget } from '@/lib/rf'
+import { STATION_TYPES, StationType, calcEIRP, stationsInterfere, haversineKm } from '@/lib/rf'
 import PropRow from '@/components/ui/PropRow'
 import Metric from '@/components/ui/Metric'
 import SectionTitle from '@/components/ui/SectionTitle'
 import StationIcon from '@/components/ui/StationIcon'
 import styles from './StationProps.module.css'
 
+const HEIGHT_LABEL: Record<StationType, string> = {
+  bts:      'Înălțime turn',
+  antenna:  'Înălțime pol',
+  router:   'Înălțime',
+  repeater: 'Înălțime catarg',
+}
+
 export default function StationProps() {
   const {
     selId, stations, links, updateStation, removeStation, removeLink, selectStation,
     polygonPending, coverageDiagnostics, fetchStationElevation,
-    diagnosticMode, coverageRays,
+    diagnosticMode, coverageRays, getLinkStats,
   } = useNetStore()
   const station = stations.find(s => s.id === selId)
   if (!station) return null
@@ -26,19 +33,18 @@ export default function StationProps() {
   const update = (key: keyof typeof station) => (value: number) =>
     updateStation(station.id, { [key]: value } as any)
 
-  const interferers = stations.filter(other => {
-    if (other.id === station.id || other.type !== station.type) return false
-    const dx = (station.lat - other.lat) * 111.32
-    const dy = (station.lng - other.lng) * 111.32 * Math.cos(station.lat * Math.PI / 180)
-    return Math.sqrt(dx * dx + dy * dy) < station.radius + other.radius
-  })
+  // Use stationsInterfere (haversine + frequency check) — no inline flat approximation.
+  const interferers = stations.filter(
+    other => other.id !== station.id && stationsInterfere(station, other),
+  )
 
   const stationLinks = links
     .filter(link => link.station1Id === station.id || link.station2Id === station.id)
     .map(link => {
-      const otherId    = link.station1Id === station.id ? link.station2Id : link.station1Id
-      const other      = stations.find(s => s.id === otherId)
-      const linkStats  = other ? linkBudget(station, other) : null
+      const otherId   = link.station1Id === station.id ? link.station2Id : link.station1Id
+      const other     = stations.find(s => s.id === otherId)
+      // Prefer terrain-aware stats from store (includes losObstructed, diffractionLoss).
+      const linkStats = getLinkStats(link.id)
       return { link, other, linkStats }
     })
 
@@ -69,9 +75,21 @@ export default function StationProps() {
       />
 
       {interferers.length > 0 && (
-        <div className={styles.warning}>
+        <div
+          className={styles.warning}
+          title={`Ariile de acoperire ale stațiilor de același tip și frecvență se suprapun. Raza de acoperire a acestei stații: ${station.radius.toFixed(2)} km. Soluție: mărește distanța dintre stații, reduce puterea TX sau schimbă frecvența pe una din stații.`}
+        >
           <AlertTriangle size={13} strokeWidth={1.75} className={styles.warningIcon} />
-          Interferență cu {interferers.map(i => i.name).join(', ')}
+          <div>
+            Interferență co-canal cu{' '}
+            {interferers.map(i => {
+              const dist = haversineKm(station.lat, station.lng, i.lat, i.lng)
+              return `${i.name} (${dist.toFixed(2)} km)`
+            }).join(', ')}
+            <div style={{ fontSize: 10, opacity: 0.75, marginTop: 2 }}>
+              Ariile de acoperire se suprapun pe aceeași frecvență — hover pentru detalii
+            </div>
+          </div>
         </div>
       )}
 
@@ -83,20 +101,24 @@ export default function StationProps() {
       )}
 
       <SectionTitle>Parametri RF</SectionTitle>
-      <PropRow label="TX Power"       value={station.txPower}          unit="dBm" onChange={update('txPower')}   min={0}   max={60} />
-      <PropRow label="Gain antenă"    value={station.gain}             unit="dBi" onChange={update('gain')}      min={0}   max={40} />
-      <PropRow label="Frecvență"      value={station.freq}             unit="MHz" onChange={update('freq')}      min={1} />
-      <PropRow label="Înălțime BTS"   value={station.height}           unit="m"   onChange={update('height')}   min={0.1} />
-      <PropRow label="Sensitivitate"  value={station.sens}             unit="dBm" onChange={update('sens')}      max={0} />
-      <PropRow label="Azimut"         value={station.azimuth}          unit="°"   onChange={update('azimuth')}  min={0}   max={360} />
-      <PropRow label="Unghi fascicul" value={station.beamwidth ?? 360} unit="°"   onChange={update('beamwidth')} min={1}  max={360} />
+      <PropRow label="TX Power"              value={station.txPower}          unit="dBm" onChange={update('txPower')}   min={0}   max={60} />
+      <PropRow label="Gain antenă"           value={station.gain}             unit="dBi" onChange={update('gain')}      min={0}   max={40} />
+      <PropRow label="Frecvență"             value={station.freq}             unit="MHz" onChange={update('freq')}      min={1} />
+      <PropRow label={HEIGHT_LABEL[station.type]} value={station.height}      unit="m"   onChange={update('height')}   min={0.1} />
+      <PropRow label="Sensitivitate"         value={station.sens}             unit="dBm" onChange={update('sens')}      max={0} />
+      <PropRow label="Azimut"                value={station.azimuth}          unit="°"   onChange={update('azimuth')}  min={0}   max={360} />
+      <PropRow label="Unghi fascicul"        value={station.beamwidth ?? 360} unit="°"   onChange={update('beamwidth')} min={1}  max={360} />
 
       <SectionTitle>Metrici Calculați</SectionTitle>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
         <Metric label="EIRP"          value={`${eirp.toFixed(0)} dBm`} />
         <Metric label="Max Path Loss" value={`${maxPathLoss.toFixed(0)} dB`} />
       </div>
-      <Metric label="Coverage Radius (Okumura-Hata)" value={`${station.radius.toFixed(3)} km`}                          color="var(--green)" />
+      <Metric
+        label={`Rază acoperire (${station.type === 'router' ? 'FSPL' : 'Okumura-Hata'})`}
+        value={`${station.radius.toFixed(3)} km`}
+        color="var(--green)"
+      />
       <Metric label="Coverage Area"                  value={`${(Math.PI * station.radius * station.radius).toFixed(2)} km²`} color="var(--green)" />
       <SectionTitle>Coverage Validator</SectionTitle>
       <div className={styles.coverageValidation}>
@@ -188,18 +210,31 @@ export default function StationProps() {
                   </span>
                   {!linkStats.beamMisaligned && <>{' · FSPL: '}{linkStats.fspl.toFixed(1)} dB</>}
                 </div>
+
+                {/* ── Avertismente ordonate de severitate ── */}
                 {linkStats.beamMisaligned && (
                   <div className={styles.linkTerrain} style={{ color: 'var(--red)' }}>
-                    Fascicul nealiniat — antena nu vizeaza statia destinatie
+                    ✗ Fascicul nealiniat — antena nu vizează stația destinație
                   </div>
                 )}
-                {!linkStats.beamMisaligned && linkStats.diffractionLoss > 0 && (
-                  <div className={styles.linkTerrain}>
-                    Terrain: +{linkStats.diffractionLoss.toFixed(1)} dB{' '}
-                    {linkStats.losObstructed
-                      ? <span style={{ color: 'var(--amber)' }}>⚠ LOS blocked</span>
-                      : <span style={{ color: 'var(--dim)' }}>Fresnel</span>
-                    }
+                {!linkStats.beamMisaligned && linkStats.losObstructed && (
+                  <div className={styles.linkTerrain} style={{ color: 'var(--red)' }}>
+                    ✗ LOS blocat — obstacol fizic pe traseul semnalului
+                  </div>
+                )}
+                {!linkStats.beamMisaligned && linkStats.frequencyMismatch && (
+                  <div className={styles.linkTerrain} style={{ color: 'var(--amber)' }}>
+                    ⚠ Frecvențe incompatibile — stațiile operează pe benzi diferite
+                  </div>
+                )}
+                {!linkStats.beamMisaligned && !linkStats.losObstructed && linkStats.diffractionLoss > 0 && (
+                  <div className={styles.linkTerrain} style={{ color: 'var(--amber)' }}>
+                    ⚠ Diffracție teren: +{linkStats.diffractionLoss.toFixed(1)} dB pierdere Fresnel
+                  </div>
+                )}
+                {!linkStats.beamMisaligned && !linkStats.losObstructed && !linkStats.frequencyMismatch && linkStats.ok && (
+                  <div className={styles.linkTerrain} style={{ color: 'var(--green)' }}>
+                    ✓ LOS liber
                   </div>
                 )}
               </div>

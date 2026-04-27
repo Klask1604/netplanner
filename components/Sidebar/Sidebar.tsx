@@ -3,10 +3,11 @@ import { useRef } from 'react'
 import { useNetStore } from '@/store/netStore'
 import StationList from './StationList'
 import StationProps from './StationProps'
+import LinkProps from './LinkProps'
 import styles from './Sidebar.module.css'
 
 export default function Sidebar() {
-  const { selId, stations, exportJSON, importJSON } = useNetStore()
+  const { selId, selLinkId, stations, links, exportJSON, importJSON } = useNetStore()
   const fileRef = useRef<HTMLInputElement>(null)
 
   const handleExport = () => {
@@ -27,15 +28,17 @@ export default function Sidebar() {
     e.target.value = ''
   }
 
+  const headerLabel = selLinkId ? 'Link RF' : selId ? 'Proprietăți' : 'Network Topology'
+
   return (
     <div className={styles.panel}>
       <div className={styles.header}>
-        <span className={styles.headerLabel}>{selId ? 'Proprietăți' : 'Network Topology'}</span>
-        {!selId && <span className={styles.headerCount}>{stations.length} stații</span>}
+        <span className={styles.headerLabel}>{headerLabel}</span>
+        {!selId && !selLinkId && <span className={styles.headerCount}>{stations.length} stații · {links.length} linkuri</span>}
       </div>
 
       <div className={styles.body}>
-        {selId ? <StationProps /> : <StationList />}
+        {selLinkId ? <LinkProps /> : selId ? <StationProps /> : <StationList />}
       </div>
 
       <div className={styles.footer}>
