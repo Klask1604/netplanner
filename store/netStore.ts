@@ -61,6 +61,7 @@ interface NetStore {
   cancelLink:            () => void
   getLinkStats:          (linkId: number) => LinkStats | null
   getInterferences:      (stationId: number) => Station[]
+  getCoverageAreaKm2:    (stationId: number) => number | null
   totalCoverageArea:     () => number
   interferenceCount:     () => number
   exportJSON:            () => string
@@ -90,6 +91,27 @@ let _nextEntityId = 1
 
 // One debounce timer per station — used in updateStation
 const _coverageDebounceTimers: Record<number, ReturnType<typeof setTimeout>> = {}
+
+function polygonAreaKm2(points: [number, number][]): number {
+  if (points.length < 3) return 0
+
+  const [lat0, lng0] = points[0]
+  let shoelaceSum = 0
+
+  for (let i = 0; i < points.length; i++) {
+    const [lat1, lng1] = points[i]
+    const [lat2, lng2] = points[(i + 1) % points.length]
+
+    const x1 = (lng1 - lng0) * 111.32 * Math.cos((lat1 * Math.PI) / 180)
+    const y1 = (lat1 - lat0) * 111.32
+    const x2 = (lng2 - lng0) * 111.32 * Math.cos((lat2 * Math.PI) / 180)
+    const y2 = (lat2 - lat0) * 111.32
+
+    shoelaceSum += x1 * y2 - x2 * y1
+  }
+
+  return Math.abs(shoelaceSum) / 2
+}
 
 export const useNetStore = create<NetStore>((set, get) => ({
   // ── Initial state ──────────────────────────────────────────────────────────
@@ -237,6 +259,13 @@ export const useNetStore = create<NetStore>((set, get) => ({
     )
   },
 
+  getCoverageAreaKm2: (stationId) => {
+    const polygons = get().coveragePolygons[stationId]
+    const boundary = polygons?.[0]
+    if (!boundary || boundary.length < 3) return null
+    return polygonAreaKm2(boundary)
+  },
+
   interferenceCount: () => {
     const { stations } = get()
     let count = 0
@@ -249,7 +278,11 @@ export const useNetStore = create<NetStore>((set, get) => ({
   },
 
   totalCoverageArea: () =>
-    get().stations.reduce((sum, s) => sum + Math.PI * s.radius * s.radius, 0),
+    get().stations.reduce((sum, s) => {
+      const polygonArea = get().getCoverageAreaKm2(s.id)
+      const fallbackCircleArea = Math.PI * s.radius * s.radius
+      return sum + (polygonArea ?? fallbackCircleArea)
+    }, 0),
 
   // ── Import / Export ────────────────────────────────────────────────────────
   exportJSON: () => JSON.stringify({ stations: get().stations, links: get().links }, null, 2),

@@ -19,7 +19,7 @@ export default function StationProps() {
   const {
     selId, stations, links, updateStation, removeStation, removeLink, selectStation,
     polygonPending, coverageDiagnostics, fetchStationElevation,
-    diagnosticMode, coverageRays, getLinkStats,
+    diagnosticMode, coverageRays, getLinkStats, getCoverageAreaKm2,
   } = useNetStore()
   const station = stations.find(s => s.id === selId)
   if (!station) return null
@@ -29,6 +29,7 @@ export default function StationProps() {
   const stationConfig  = STATION_TYPES[station.type]
   const eirp           = calcEIRP(station)
   const maxPathLoss    = eirp - station.sens
+  const coverageAreaKm2 = getCoverageAreaKm2(station.id) ?? (Math.PI * station.radius * station.radius)
 
   const update = (key: keyof typeof station) => (value: number) =>
     updateStation(station.id, { [key]: value } as any)
@@ -119,7 +120,7 @@ export default function StationProps() {
         value={`${station.radius.toFixed(3)} km`}
         color="var(--green)"
       />
-      <Metric label="Coverage Area"                  value={`${(Math.PI * station.radius * station.radius).toFixed(2)} km²`} color="var(--green)" />
+      <Metric label="Coverage Area"                  value={`${coverageAreaKm2.toFixed(2)} km²`} color="var(--green)" />
       <SectionTitle>Coverage Validator</SectionTitle>
       <div className={styles.coverageValidation}>
         <div className={styles.coverageValidationRow}>
