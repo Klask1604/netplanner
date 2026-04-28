@@ -239,9 +239,12 @@ body {
 .diagnostic-ray-popup .ray-popup-row span {
   color: var(--dim);
 }
-.diagnostic-ray-popup .ray-popup-row b.blocked {
+.diagnostic-ray-popup .ray-popup-row b.high-loss {
   color: #ff5252;
 }
-.diagnostic-ray-popup .ray-popup-row b.clear {
+.diagnostic-ray-popup .ray-popup-row b.medium-loss {
+  color: #ffb300;
+}
+.diagnostic-ray-popup .ray-popup-row b.low-loss {
   color: #37ff8b;
 }

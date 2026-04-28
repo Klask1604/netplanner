@@ -37,6 +37,7 @@ export interface LinkStats {
   margin: number; // dB above sensitivity
   ok: boolean;
   diffractionLoss: number; // dB additional loss from terrain (0 when not computed)
+  buildingPenetrationLoss: number; // dB additional loss from building penetration
   losObstructed: boolean; // true if terrain physically crosses the LOS line
   beamMisaligned: boolean; // true if either station's directional beam doesn't cover the other
   frequencyMismatch: boolean; // true if stations operate on incompatible frequency bands (>10% relative diff)
@@ -201,6 +202,7 @@ export function linkBudget(station1: Station, station2: Station): LinkStats {
       margin: 99,
       ok: true,
       diffractionLoss: 0,
+      buildingPenetrationLoss: 0,
       losObstructed: false,
       beamMisaligned: false,
       frequencyMismatch: false,
@@ -227,6 +229,7 @@ export function linkBudget(station1: Station, station2: Station): LinkStats {
       margin: -999,
       ok: false,
       diffractionLoss: 0,
+      buildingPenetrationLoss: 0,
       losObstructed: false,
       beamMisaligned: true,
       frequencyMismatch: false,
@@ -255,6 +258,7 @@ export function linkBudget(station1: Station, station2: Station): LinkStats {
       margin,
       ok: margin > 0,
       diffractionLoss: 0,
+      buildingPenetrationLoss: 0,
       losObstructed: false,
       beamMisaligned: false,
       frequencyMismatch: false,
@@ -276,6 +280,7 @@ export function linkBudget(station1: Station, station2: Station): LinkStats {
     margin,
     ok: margin > 0,
     diffractionLoss: 0,
+    buildingPenetrationLoss: 0,
     losObstructed: false,
     beamMisaligned: false,
     frequencyMismatch,
@@ -346,6 +351,7 @@ export function terrainLinkBudget(
   const distKm = base.distance;
   const freqMHz = station1.freq; // Fresnel radius uses transmitter wavelength
   const lambdaKm = 300 / freqMHz; // wavelength in km
+  const sampleSpacingKm = distKm / (elevationSampleCount + 1);
 
   let worstFresnelNumber = -Infinity;
   let obstructed = false;
@@ -356,8 +362,7 @@ export function terrainLinkBudget(
     const distFromRx = (1 - pathFraction) * distKm;
     const losElevation =
       txAntennaMsl + pathFraction * (rxAntennaMsl - txAntennaMsl); // LOS height at this point (m AMSL)
-    const buildingH = pathBuildingHeights[i] ?? 0;
-    const obstacleMsl = pathElevations[i] + buildingH; // terrain + building top
+    const obstacleMsl = pathElevations[i]; // terrain only; buildings are modeled as penetration loss
     const clearanceM = obstacleMsl - losElevation; // >0 means obstacle above LOS
 
     const fresnelNumber =
@@ -371,8 +376,12 @@ export function terrainLinkBudget(
     }
   }
 
+  const buildingPenetrationLoss = computeBuildingPenetrationLossDb(
+    pathBuildingHeights,
+    sampleSpacingKm,
+  );
   const diffractionLoss = knifeEdgeLoss(worstFresnelNumber);
-  const totalLoss = base.fspl + diffractionLoss;
+  const totalLoss = base.fspl + diffractionLoss + buildingPenetrationLoss;
   const rxPower = station1.txPower + station1.gain - totalLoss + station2.gain;
   const margin = rxPower - station2.sens;
 
@@ -383,6 +392,7 @@ export function terrainLinkBudget(
     margin,
     ok: margin > 0,
     diffractionLoss: Math.round(diffractionLoss * 10) / 10,
+    buildingPenetrationLoss: Math.round(buildingPenetrationLoss * 10) / 10,
     losObstructed: obstructed,
     beamMisaligned: false,
     frequencyMismatch: base.frequencyMismatch,
@@ -505,6 +515,22 @@ const MARGIN_STOPS = [0, 5, 10, 20, 30] as const; // dB margin thresholds
 // ~1 m radial precision near the antenna and ~12 m at 1 km radius.
 export const COVERAGE_BEARINGS = 360; // directions (every 1°)
 export const COVERAGE_SAMPLES = 80; // samples per direction
+export const BUILDING_LOSS_DB_PER_100M = 2.5;
+
+function computeBuildingPenetrationLossDb(
+  buildingHeights: number[],
+  sampleSpacingKm: number,
+): number {
+  if (buildingHeights.length === 0 || sampleSpacingKm <= 0) return 0;
+  const spacingFactor = sampleSpacingKm / 0.1; // normalize to 100 m
+  let lossDb = 0;
+  for (const h of buildingHeights) {
+    if (h <= 0) continue;
+    const heightFactor = 0.7 + 0.3 * Math.min(h / 20, 2);
+    lossDb += BUILDING_LOSS_DB_PER_100M * spacingFactor * heightFactor;
+  }
+  return lossDb;
+}
 
 /**
  * Returns true when bearingDeg falls within the antenna sector defined by
@@ -561,14 +587,27 @@ function analyseBearing(
   terrainSamples: number[],
   buildingHeights: number[],
   flatRadiusKm: number,
-): { obstructedAtKm: number | null; effectiveHeight: number } {
+): {
+  obstructedAtKm: number | null;
+  effectiveHeight: number;
+  buildingPenetrationLossDb: number;
+  buildingSamples: number;
+} {
   const sampleCount = terrainSamples.length;
   const antennaMsl = groundElevationAtStation + antennaHeightAgl;
+  const sampleSpacingKm = flatRadiusKm / Math.max(sampleCount, 1);
+  const buildingPenetrationLossDb = computeBuildingPenetrationLossDb(
+    buildingHeights,
+    sampleSpacingKm,
+  );
+  const buildingSamples = buildingHeights.filter((h) => h > 0).length;
 
   if (sampleCount === 0) {
     return {
       obstructedAtKm: null,
       effectiveHeight: Math.max(antennaHeightAgl, 5),
+      buildingPenetrationLossDb: 0,
+      buildingSamples: 0,
     };
   }
 
@@ -577,55 +616,54 @@ function analyseBearing(
   // Virtual "previous clear" point at the station origin.
   let prevF = 0;
   let prevTerrain = groundElevationAtStation;
-  let prevBuilding = 0;
 
   for (let i = 0; i < sampleCount; i++) {
     const f = (i + 1) / sampleCount;
     const losMsl = antennaMsl + f * (receiverMsl - antennaMsl);
     const terrain = terrainSamples[i];
-    const building = buildingHeights[i] ?? 0;
-    const obstacleMsl = terrain + building;
+    const obstacleMsl = terrain; // terrain-only blocking; buildings add penetration loss
 
     if (obstacleMsl > losMsl) {
       let lowF = prevF;
       let lowTerrain = prevTerrain;
-      let lowBuilding = prevBuilding;
       let highF = f;
       let highTerrain = terrain;
-      let highBuilding = building;
 
       for (let iter = 0; iter < 6; iter++) {
         const midF = (lowF + highF) / 2;
         const span = highF - lowF || 1;
         const blend = (midF - lowF) / span;
         const midTerrain = lowTerrain + blend * (highTerrain - lowTerrain);
-        const midBuilding = lowBuilding + blend * (highBuilding - lowBuilding);
-        const midObstacle = midTerrain + midBuilding;
+        const midObstacle = midTerrain;
         const midLos = antennaMsl + midF * (receiverMsl - antennaMsl);
         if (midObstacle > midLos) {
           highF = midF;
           highTerrain = midTerrain;
-          highBuilding = midBuilding;
         } else {
           lowF = midF;
           lowTerrain = midTerrain;
-          lowBuilding = midBuilding;
         }
       }
 
       const obstructedAtKm = Math.max(lowF * flatRadiusKm, 0.001);
-      return { obstructedAtKm, effectiveHeight: 5 };
+      return {
+        obstructedAtKm,
+        effectiveHeight: 5,
+        buildingPenetrationLossDb,
+        buildingSamples,
+      };
     }
 
     prevF = f;
     prevTerrain = terrain;
-    prevBuilding = building;
   }
 
   const effectiveHeight = antennaMsl - terrainSamples[0];
   return {
     obstructedAtKm: null,
     effectiveHeight: Math.max(effectiveHeight, 5),
+    buildingPenetrationLossDb,
+    buildingSamples,
   };
 }
 
@@ -755,6 +793,12 @@ export interface CoverageRawDiagnostics {
   totalBearings: number;
   /** Mean obstruction distance across obstructed bearings (km), null when none. */
   meanObstructionKm: number | null;
+  /** Mean building penetration loss over active bearings (dB). */
+  meanBuildingLossDb: number;
+  /** Maximum building penetration loss on any active bearing (dB). */
+  maxBuildingLossDb: number;
+  /** Number of sample points that intersect building footprints. */
+  buildingHitSamples: number;
 }
 
 /**
@@ -768,6 +812,10 @@ export interface BearingDiagnostic {
   obstructedAtKm: number | null;
   /** Raw 0 dB radius used for this bearing BEFORE polygon smoothing (km). */
   effectiveRadiusKm: number;
+  /** Cumulative loss from buildings on this bearing (dB). */
+  buildingPenetrationLossDb: number;
+  /** Number of sampled points along this bearing that were inside buildings. */
+  buildingSamples: number;
   /** Tip of the ray (visible coverage edge along this bearing). */
   edgeLat: number;
   edgeLng: number;
@@ -815,6 +863,8 @@ export function terrainCoveragePolygon(
   const bearingIndices: number[] = [];
   const obstructedAtKmList: (number | null)[] = [];
   const effectiveHeightList: number[] = [];
+  const buildingLossPerBearing: number[] = [];
+  const buildingSamplesPerBearing: number[] = [];
 
   // For directional antennas, start iteration from the LEFT edge of the sector
   // so bearings are pushed in angular order (left-edge → right-edge).
@@ -840,7 +890,12 @@ export function terrainCoveragePolygon(
     const terrainSamples = terrainElevations.slice(sliceStart, sliceEnd);
     const heightSamples = buildingHeights.slice(sliceStart, sliceEnd);
 
-    const { obstructedAtKm, effectiveHeight } = analyseBearing(
+    const {
+      obstructedAtKm,
+      effectiveHeight,
+      buildingPenetrationLossDb,
+      buildingSamples,
+    } = analyseBearing(
       groundElevation,
       antennaHeightAgl,
       terrainSamples,
@@ -852,6 +907,8 @@ export function terrainCoveragePolygon(
     bearingIndices.push(bearingIndex);
     obstructedAtKmList.push(obstructedAtKm);
     effectiveHeightList.push(effectiveHeight);
+    buildingLossPerBearing.push(buildingPenetrationLossDb);
+    buildingSamplesPerBearing.push(buildingSamples);
   }
 
   // Per-bearing raw 0 dB radius (used for diagnostic rays — pre-smoothing).
@@ -859,13 +916,20 @@ export function terrainCoveragePolygon(
   for (let i = 0; i < bearingDegs.length; i++) {
     const obstructedAtKm = obstructedAtKmList[i];
     const effectiveHeight = effectiveHeightList[i];
-    rawEffectiveRadiusKm[i] =
+    const baseRadiusKm =
       obstructedAtKm !== null
         ? obstructedAtKm
         : Math.min(
             okumuraHata({ ...station, height: effectiveHeight }),
             flatRadiusKm,
           );
+    const slope = okumuraHataSlope(effectiveHeight);
+    const lossMultiplier = Math.pow(
+      10,
+      -buildingLossPerBearing[i] / Math.max(slope, 1),
+    );
+    rawEffectiveRadiusKm[i] =
+      obstructedAtKm !== null ? baseRadiusKm : baseRadiusKm * lossMultiplier;
   }
 
   // Per-bearing smoothing thresholds tuned for the 1°/360-bearing grid.
@@ -892,12 +956,20 @@ export function terrainCoveragePolygon(
               okumuraHata({ ...station, height: effectiveHeight }),
               flatRadiusKm,
             );
+      const slope = okumuraHataSlope(effectiveHeight);
+      const lossMultiplier = Math.pow(
+        10,
+        -buildingLossPerBearing[i] / Math.max(slope, 1),
+      );
+      const attenuatedRadiusKm =
+        obstructedAtKm !== null
+          ? effectiveRadiusKm
+          : effectiveRadiusKm * lossMultiplier;
       const marginDb = MARGIN_STOPS[marginIndex];
       const coverageRadiusKm =
         marginDb === 0
-          ? effectiveRadiusKm
-          : effectiveRadiusKm *
-            Math.pow(10, -marginDb / okumuraHataSlope(effectiveHeight));
+          ? attenuatedRadiusKm
+          : attenuatedRadiusKm * Math.pow(10, -marginDb / slope);
 
       perBearingRadius.push(coverageRadiusKm);
     }
@@ -943,6 +1015,15 @@ export function terrainCoveragePolygon(
       obstructionSumKm += d;
     }
   }
+  let sumBuildingLossDb = 0;
+  let maxBuildingLossDb = 0;
+  let buildingHitSamples = 0;
+  for (let i = 0; i < buildingLossPerBearing.length; i++) {
+    const loss = buildingLossPerBearing[i];
+    sumBuildingLossDb += loss;
+    if (loss > maxBuildingLossDb) maxBuildingLossDb = loss;
+    buildingHitSamples += buildingSamplesPerBearing[i];
+  }
 
   const diagnostics: CoverageRawDiagnostics = {
     samplesUsed: COVERAGE_BEARINGS * COVERAGE_SAMPLES,
@@ -952,6 +1033,10 @@ export function terrainCoveragePolygon(
       obstructedBearings > 0
         ? obstructionSumKm / obstructedBearings
         : null,
+    meanBuildingLossDb:
+      bearingDegs.length > 0 ? sumBuildingLossDb / bearingDegs.length : 0,
+    maxBuildingLossDb,
+    buildingHitSamples,
   };
 
   // Build per-bearing diagnostic objects (used by the client ray overlay).
@@ -989,6 +1074,8 @@ export function terrainCoveragePolygon(
       bearingDeg,
       obstructedAtKm,
       effectiveRadiusKm,
+      buildingPenetrationLossDb: buildingLossPerBearing[i],
+      buildingSamples: buildingSamplesPerBearing[i],
       edgeLat,
       edgeLng,
       edgeBuildingHeight:

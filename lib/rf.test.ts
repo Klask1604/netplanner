@@ -1,6 +1,7 @@
 import {
   okumuraHata,
   linkBudget,
+  terrainLinkBudget,
   calcEIRP,
   calcCoverageArea,
   haversineKm,
@@ -353,5 +354,59 @@ describe('terrainCoveragePolygon', () => {
     expect(result.bearings.length).toBeGreaterThan(50)
     expect(result.bearings.length).toBeLessThan(70)
     expect(result.diagnostics.totalBearings).toBe(result.bearings.length)
+  })
+
+  test('cladirile nu blocheaza hard raza: reduc gradual prin pierdere dB', () => {
+    const station: Station = {
+      ...btsBucharest,
+      radius: 3,
+      elevation: 500,
+      beamwidth: 360,
+    }
+    const totalSamples = COVERAGE_BEARINGS * COVERAGE_SAMPLES
+    const terrainElevations = Array.from({ length: totalSamples }, () => 500)
+    const noBuildings = Array.from({ length: totalSamples }, () => 0)
+    const denseBuildings = Array.from({ length: totalSamples }, () => 18)
+
+    const clear = terrainCoveragePolygon(station, terrainElevations, noBuildings)
+    const attenuated = terrainCoveragePolygon(station, terrainElevations, denseBuildings)
+
+    expect(attenuated.bearings[0].obstructedAtKm).toBeNull()
+    expect(attenuated.bearings[0].buildingPenetrationLossDb).toBeGreaterThan(0)
+    expect(attenuated.bearings[0].effectiveRadiusKm).toBeLessThan(clear.bearings[0].effectiveRadiusKm)
+    expect(attenuated.diagnostics.meanBuildingLossDb).toBeGreaterThan(0)
+    expect(attenuated.diagnostics.buildingHitSamples).toBeGreaterThan(0)
+  })
+})
+
+describe('terrainLinkBudget', () => {
+  test('adauga pierdere prin cladiri fara a forta LOS obstructed', () => {
+    const tx: Station = {
+      ...btsBucharest,
+      id: 11,
+      elevation: 120,
+      height: 20,
+      beamwidth: 360,
+    }
+    const rx: Station = {
+      ...antennaCluj,
+      id: 12,
+      lat: tx.lat + 0.02,
+      lng: tx.lng,
+      elevation: 120,
+      beamwidth: 360,
+    }
+
+    const sampleCount = 24
+    const terrain = Array.from({ length: sampleCount }, () => 120)
+    const noBuildings = Array.from({ length: sampleCount }, () => 0)
+    const withBuildings = Array.from({ length: sampleCount }, () => 15)
+
+    const clear = terrainLinkBudget(tx, rx, terrain, noBuildings)
+    const attenuated = terrainLinkBudget(tx, rx, terrain, withBuildings)
+
+    expect(attenuated.losObstructed).toBe(false)
+    expect(attenuated.buildingPenetrationLoss).toBeGreaterThan(0)
+    expect(attenuated.margin).toBeLessThan(clear.margin)
   })
 })

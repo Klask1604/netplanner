@@ -73,32 +73,32 @@ export default function LinkProps() {
           <div className={styles.statusList}>
             {stats.beamMisaligned && (
               <div className={styles.statusRow} style={{ color: 'var(--red)' }}>
-                ✗ Fascicul nealiniat — antena nu vizează stația destinație
+                [FAIL] Fascicul nealiniat — antena nu vizeaza statia destinatie
               </div>
             )}
             {!stats.beamMisaligned && stats.losObstructed && (
               <div className={styles.statusRow} style={{ color: 'var(--red)' }}>
-                ✗ LOS blocat — obstacol fizic pe traseul semnalului
+                [FAIL] LOS blocat — obstacol fizic pe traseul semnalului
               </div>
             )}
             {!stats.beamMisaligned && !stats.losObstructed && stats.diffractionLoss > 0 && (
               <div className={styles.statusRow} style={{ color: 'var(--amber)' }}>
-                ⚠ Diffracție Fresnel — teren atenuează parțial semnalul
+                [WARN] Diffractie Fresnel — teren atenueaza partial semnalul
               </div>
             )}
             {stats.frequencyMismatch && (
               <div className={styles.statusRow} style={{ color: 'var(--amber)' }}>
-                ⚠ Frecvențe incompatibile ({s1.freq} MHz / {s2.freq} MHz)
+                [WARN] Frecvente incompatibile ({s1.freq} MHz / {s2.freq} MHz)
               </div>
             )}
             {!stats.beamMisaligned && !stats.losObstructed && !stats.frequencyMismatch && stats.ok && (
               <div className={styles.statusRow} style={{ color: 'var(--green)' }}>
-                ✓ LOS liber — semnal neobstrucționat
+                [OK] LOS liber — semnal neobstructionat
               </div>
             )}
             {!stats.ok && !stats.beamMisaligned && (
               <div className={styles.statusRow} style={{ color: 'var(--red)' }}>
-                ✗ Link inactiv — margin insuficient ({stats.margin.toFixed(1)} dB)
+                [FAIL] Link inactiv — margin insuficient ({stats.margin.toFixed(1)} dB)
               </div>
             )}
           </div>

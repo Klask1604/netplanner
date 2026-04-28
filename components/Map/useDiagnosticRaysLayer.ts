@@ -28,7 +28,12 @@ function buildFeatures(
 ): GeoJSON.FeatureCollection {
   const features: GeoJSON.Feature[] = []
   for (const b of bearings) {
-    const status = b.obstructedAtKm !== null ? 'blocked' : 'clear'
+    const status =
+      b.buildingPenetrationLossDb >= 10
+        ? 'high-loss'
+        : b.buildingPenetrationLossDb >= 4
+          ? 'medium-loss'
+          : 'low-loss'
 
     features.push({
       type: 'Feature',
@@ -46,6 +51,8 @@ function buildFeatures(
         obstructedAtKm:       b.obstructedAtKm ?? -1,
         edgeBuildingHeight:   b.edgeBuildingHeight,
         edgeTerrainElevation: b.edgeTerrainElevation,
+        buildingPenetrationLossDb: b.buildingPenetrationLossDb,
+        buildingSamples: b.buildingSamples,
       },
     })
 
@@ -59,6 +66,8 @@ function buildFeatures(
           obstructedAtKm:       b.obstructedAtKm,
           edgeBuildingHeight:   b.edgeBuildingHeight,
           edgeTerrainElevation: b.edgeTerrainElevation,
+          buildingPenetrationLossDb: b.buildingPenetrationLossDb,
+          buildingSamples: b.buildingSamples,
         },
       })
     }
@@ -128,14 +137,21 @@ export function useDiagnosticRaysLayer({
         if (!f) return
         map.getCanvas().style.cursor = 'crosshair'
         const p = f.properties ?? {}
-        const status = p.status === 'blocked' ? 'BLOCKED' : 'CLEAR'
+        const lossDb = Number(p.buildingPenetrationLossDb ?? 0)
+        const status =
+          p.status === 'high-loss'
+            ? 'HIGH LOSS'
+            : p.status === 'medium-loss'
+              ? 'MEDIUM LOSS'
+              : 'LOW LOSS'
         const obstructedAtKm = Number(p.obstructedAtKm ?? -1)
         const obstructedLine =
           obstructedAtKm > 0
-            ? `Obstructie la <b>${(obstructedAtKm * 1000).toFixed(1)} m</b>`
+            ? `Obstructie teren la <b>${(obstructedAtKm * 1000).toFixed(1)} m</b>`
             : `Distanta efectiva <b>${(Number(p.effectiveRadiusKm ?? 0) * 1000).toFixed(1)} m</b>`
-        const buildingLine =
-          p.status === 'blocked'
+        const buildingLine = `Pierdere cladiri: <b>${lossDb.toFixed(1)} dB</b> (${Number(p.buildingSamples ?? 0)} sample-uri)`
+        const edgeBuildingLine =
+          Number(p.edgeBuildingHeight ?? 0) > 0
             ? `Cladire la edge: <b>${Number(p.edgeBuildingHeight ?? 0).toFixed(0)} m</b>`
             : ''
         const terrainLine = `Teren la edge: <b>${Number(p.edgeTerrainElevation ?? 0).toFixed(0)} m AMSL</b>`
@@ -145,7 +161,8 @@ export function useDiagnosticRaysLayer({
             <div class="ray-popup-row"><span>Bearing</span><b>${p.bearingDeg}&deg;</b></div>
             <div class="ray-popup-row"><span>Status</span><b class="${p.status}">${status}</b></div>
             <div class="ray-popup-row">${obstructedLine}</div>
-            ${buildingLine ? `<div class="ray-popup-row">${buildingLine}</div>` : ''}
+            <div class="ray-popup-row">${buildingLine}</div>
+            ${edgeBuildingLine ? `<div class="ray-popup-row">${edgeBuildingLine}</div>` : ''}
             <div class="ray-popup-row">${terrainLine}</div>
           </div>
         `

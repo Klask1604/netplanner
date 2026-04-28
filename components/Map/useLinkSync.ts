@@ -88,7 +88,8 @@ export function useLinkSync({ mapRef, links, stations, terrainLinkStats }: UseLi
 
         const terrainLine = hasTerrain
           ? `Terrain loss: ${stats.diffractionLoss.toFixed(1)} dB` +
-            (stats.losObstructed ? ' ⚠ LOS blocked' : ' ✓ LOS clear')
+            (stats.losObstructed ? ' [WARN] LOS blocked' : ' [OK] LOS clear') +
+            ` | Building loss: ${stats.buildingPenetrationLoss.toFixed(1)} dB`
           : ''
 
         const combinedAreaKm2 = Math.PI * (s1.radius ** 2 + s2.radius ** 2)
@@ -107,8 +108,8 @@ export function useLinkSync({ mapRef, links, stations, terrainLinkStats }: UseLi
               `Distanta: ${stats.distance.toFixed(2)} km<br>` +
               `FSPL: ${stats.fspl.toFixed(1)} dB<br>` +
               (terrainLine ? `${terrainLine}<br>` : '') +
-              `Rx: ${stats.rxPower.toFixed(1)} dBm · Margin: ${stats.margin.toFixed(1)} dB ${stats.ok ? '✓' : '✗'}<br>` +
-              (stats.frequencyMismatch ? `<span style="color:#ffaa00">⚠ Frecvente incompatibile (${s1.freq} MHz / ${s2.freq} MHz)</span><br>` : '') +
+              `Rx: ${stats.rxPower.toFixed(1)} dBm · Margin: ${stats.margin.toFixed(1)} dB ${stats.ok ? '[OK]' : '[FAIL]'}<br>` +
+              (stats.frequencyMismatch ? `<span style="color:#ffaa00">[WARN] Frecvente incompatibile (${s1.freq} MHz / ${s2.freq} MHz)</span><br>` : '') +
               (stats.ok
                 ? `<b>Arie retea combinata: ${combinedAreaKm2.toFixed(1)} km²</b>`
                 : `<span style="color:#ff3860">Link inactiv — margin insuficient</span>`),

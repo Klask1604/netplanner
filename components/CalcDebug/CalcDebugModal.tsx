@@ -66,7 +66,7 @@ function LinkBudgetSteps({ s1, s2 }: { s1: Station, s2: Station }) {
         <Step label="EIRP sursă" formula={`TxPower₁ + Gain₁ = ${s1.txPower} + ${s1.gain}`} result={`${s1.txPower + s1.gain} dBm`} />
         <Step label="RxPower" formula={`EIRP − FSPL + Gain₂ = ${s1.txPower+s1.gain} − ${fspl.toFixed(2)} + ${s2.gain}`} result={`${rxPower.toFixed(2)} dBm`} highlight />
         <Step label="Margin" formula={`RxPower − Sens₂ = ${rxPower.toFixed(2)} − (${s2.sens})`} result={`${margin.toFixed(2)} dB`} highlight accent={ok} accentRed={!ok} />
-        <Step label="Link OK?" formula={`Margin > 0 dB ?`} result={ok ? '✓ DA' : '✗ NU'} accent={ok} accentRed={!ok} />
+        <Step label="Link OK?" formula={`Margin > 0 dB ?`} result={ok ? '[OK] DA' : '[FAIL] NU'} accent={ok} accentRed={!ok} />
       </div>
     </div>
   )

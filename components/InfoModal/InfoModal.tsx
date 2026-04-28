@@ -168,7 +168,7 @@ export default function InfoModal({ isOpen, onClose }: InfoModalProps) {
 
             <p className={styles.sectionText}>
               Două stații de <b>același tip</b> interferează dacă distanța dintre ele este mai mică
-              decât suma razelor lor de acoperire. Un avertisment <b style={{ color: 'var(--amber)' }}>⚠</b> apare
+              decât suma razelor lor de acoperire. Un avertisment <b style={{ color: 'var(--amber)' }}>[WARN]</b> apare
               în lista de stații și în panoul de proprietăți.
             </p>
           </div>

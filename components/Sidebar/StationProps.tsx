@@ -214,27 +214,27 @@ export default function StationProps() {
                 {/* ── Avertismente ordonate de severitate ── */}
                 {linkStats.beamMisaligned && (
                   <div className={styles.linkTerrain} style={{ color: 'var(--red)' }}>
-                    ✗ Fascicul nealiniat — antena nu vizează stația destinație
+                    [FAIL] Fascicul nealiniat — antena nu vizeaza statia destinatie
                   </div>
                 )}
                 {!linkStats.beamMisaligned && linkStats.losObstructed && (
                   <div className={styles.linkTerrain} style={{ color: 'var(--red)' }}>
-                    ✗ LOS blocat — obstacol fizic pe traseul semnalului
+                    [FAIL] LOS blocat — obstacol fizic pe traseul semnalului
                   </div>
                 )}
                 {!linkStats.beamMisaligned && linkStats.frequencyMismatch && (
                   <div className={styles.linkTerrain} style={{ color: 'var(--amber)' }}>
-                    ⚠ Frecvențe incompatibile — stațiile operează pe benzi diferite
+                    [WARN] Frecvente incompatibile — statiile opereaza pe benzi diferite
                   </div>
                 )}
                 {!linkStats.beamMisaligned && !linkStats.losObstructed && linkStats.diffractionLoss > 0 && (
                   <div className={styles.linkTerrain} style={{ color: 'var(--amber)' }}>
-                    ⚠ Diffracție teren: +{linkStats.diffractionLoss.toFixed(1)} dB pierdere Fresnel
+                    [WARN] Diffractie teren: +{linkStats.diffractionLoss.toFixed(1)} dB pierdere Fresnel
                   </div>
                 )}
                 {!linkStats.beamMisaligned && !linkStats.losObstructed && !linkStats.frequencyMismatch && linkStats.ok && (
                   <div className={styles.linkTerrain} style={{ color: 'var(--green)' }}>
-                    ✓ LOS liber
+                    [OK] LOS liber
                   </div>
                 )}
               </div>

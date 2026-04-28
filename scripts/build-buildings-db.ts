@@ -73,7 +73,7 @@ function streamPbf(
 async function main() {
   const pbfPath = findPbfFile();
   const sizeMB = (fs.statSync(pbfPath).size / 1024 / 1024).toFixed(0);
-  console.log(`\n📂 Fișier PBF: ${path.basename(pbfPath)} (${sizeMB} MB)`);
+  console.log(`\n[INFO] Fisier PBF: ${path.basename(pbfPath)} (${sizeMB} MB)`);
 
   const dataDir = path.join(process.cwd(), "data");
   const dbPath = path.join(dataDir, "buildings.db");
@@ -84,7 +84,7 @@ async function main() {
   }
 
   // ── Pass 1: Colectează TOATE nodurile (id → lat/lng) în SQLite temp ──────
-  console.log("\n🔄 Pass 1/2: Citire noduri OSM...");
+  console.log("\n[INFO] Pass 1/2: Citire noduri OSM...");
   console.log(
     "   (Poate dura 5-10 minute pentru România — ~15 milioane noduri)\n",
   );
@@ -144,7 +144,7 @@ async function main() {
   );
 
   // ── Pass 2: Procesează way-urile cu tag building ──────────────────────────
-  console.log("\n🔄 Pass 2/2: Procesare clădiri...\n");
+  console.log("\n[INFO] Pass 2/2: Procesare cladiri...\n");
 
   const db = new Database(dbPath);
   db.exec(`
@@ -246,7 +246,7 @@ async function main() {
 
   const finalMB = (fs.statSync(dbPath).size / 1024 / 1024).toFixed(1);
   console.log(
-    `\n✅ Done! ${buildingCount.toLocaleString("ro-RO")} clădiri → ${dbPath} (${finalMB} MB)`,
+    `\n[DONE] ${buildingCount.toLocaleString("ro-RO")} cladiri -> ${dbPath} (${finalMB} MB)`,
   );
   console.log("   Rulează aplicația — va folosi DB-ul local automat.");
 }
