@@ -44,7 +44,7 @@
 
 .modalTitle {
   font-family: 'Rajdhani', sans-serif;
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 700;
   letter-spacing: 3px;
   color: var(--cyan);
@@ -52,7 +52,7 @@
 }
 
 .modalSubtitle {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--dim);
   letter-spacing: 1px;
   margin-top: 2px;
@@ -105,7 +105,7 @@
 
 .sectionTitle {
   font-family: 'Rajdhani', sans-serif;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 600;
   letter-spacing: 2px;
   color: var(--text);
@@ -113,7 +113,7 @@
 }
 
 .sectionText {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--dim);
   line-height: 1.8;
 }
@@ -159,13 +159,13 @@
 }
 
 .toolName {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text);
 }
 
 .toolDesc {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--dim);
   line-height: 1.6;
 }
@@ -178,13 +178,13 @@
   border-radius: 4px;
   padding: 10px 14px;
   font-family: 'JetBrains Mono', monospace;
-  font-size: 10px;
+  font-size: 12px;
   color: var(--text);
   line-height: 1.9;
 }
 
 .formulaLabel {
-  font-size: 9px;
+  font-size: 11px;
   letter-spacing: 2px;
   color: var(--dim);
   text-transform: uppercase;
@@ -196,7 +196,7 @@
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 6px 16px;
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .kbd {
@@ -205,7 +205,7 @@
   border-radius: 3px;
   padding: 2px 7px;
   font-family: 'JetBrains Mono', monospace;
-  font-size: 10px;
+  font-size: 12px;
   color: var(--cyan);
   white-space: nowrap;
   justify-self: start;
@@ -228,7 +228,7 @@
 }
 
 .footerNote {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--dim);
 }
 

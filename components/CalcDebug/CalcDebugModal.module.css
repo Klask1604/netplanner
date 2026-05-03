@@ -57,7 +57,7 @@
 
 .modalTitle {
   font-family: 'Rajdhani', sans-serif;
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 700;
   letter-spacing: 3px;
   color: var(--cyan);
@@ -65,7 +65,7 @@
 }
 
 .modalSubtitle {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--dim);
   letter-spacing: 0.5px;
   margin-top: 2px;
@@ -107,7 +107,7 @@
   padding: 40px 20px;
   text-align: center;
   color: var(--dim);
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.8;
 }
 
@@ -140,13 +140,13 @@
 }
 
 .stationCardName {
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--text);
 }
 
 .stationCardType {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--dim);
   letter-spacing: 1px;
 }
@@ -172,7 +172,7 @@
 }
 
 .paramLabel {
-  font-size: 9px;
+  font-size: 11px;
   color: var(--dim);
   letter-spacing: 1px;
   text-transform: uppercase;
@@ -181,7 +181,7 @@
 
 .paramValue {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
+  font-size: 13px;
   color: var(--text);
 }
 
@@ -198,7 +198,7 @@
 }
 
 .stepsTitle {
-  font-size: 9px;
+  font-size: 11px;
   letter-spacing: 2px;
   color: var(--dim);
   text-transform: uppercase;
@@ -219,7 +219,7 @@
   align-items: center;
   padding: 7px 14px;
   border-bottom: 1px solid var(--border);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .step:last-child {
@@ -233,14 +233,14 @@
 .stepLabel {
   font-family: 'JetBrains Mono', monospace;
   color: var(--cyan);
-  font-size: 9px;
+  font-size: 11px;
   letter-spacing: 0.3px;
 }
 
 .stepFormula {
   color: var(--dim);
   font-family: 'JetBrains Mono', monospace;
-  font-size: 10px;
+  font-size: 12px;
   word-break: break-all;
 }
 
@@ -259,7 +259,7 @@
 /* ── Section title ── */
 .sectionTitle {
   font-family: 'Rajdhani', sans-serif;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
   letter-spacing: 2px;
   color: var(--text);
@@ -287,13 +287,13 @@
 }
 
 .linkName {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text);
 }
 
 .linkArrow {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--dim);
 }
 
@@ -301,7 +301,7 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 10px;
+  font-size: 12px;
   color: var(--dim);
   margin-left: auto;
 }
@@ -311,7 +311,7 @@
 
 /* ── No links note ── */
 .noLinks {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--dim);
   padding: 14px;
   background: var(--surface2);
@@ -335,7 +335,7 @@
 }
 
 .footerNote {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--dim);
 }
 

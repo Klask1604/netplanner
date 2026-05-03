@@ -87,7 +87,7 @@ export default function StationProps() {
               const dist = haversineKm(station.lat, station.lng, i.lat, i.lng)
               return `${i.name} (${dist.toFixed(2)} km)`
             }).join(', ')}
-            <div style={{ fontSize: 10, opacity: 0.75, marginTop: 2 }}>
+            <div style={{ fontSize: 12, opacity: 0.75, marginTop: 2 }}>
               Ariile de acoperire se suprapun pe aceeași frecvență — hover pentru detalii
             </div>
           </div>

@@ -19,8 +19,8 @@ export default function Home() {
       <div style={{
         height: '100vh',
         display: 'grid',
-        gridTemplateRows: '46px 1fr',
-        gridTemplateColumns: '54px 1fr 300px',
+        gridTemplateRows: '52px 1fr',
+        gridTemplateColumns: '56px 1fr 328px',
         gridTemplateAreas: '"topbar topbar topbar" "toolbar map panel"',
       }}>
         <TopBar onInfoOpen={() => setShowInfo(true)} onCalcDebugOpen={() => setShowCalcDebug(true)} />

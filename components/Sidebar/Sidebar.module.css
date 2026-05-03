@@ -17,14 +17,14 @@
 }
 
 .headerLabel {
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 2px;
   color: var(--dim);
   text-transform: uppercase;
 }
 
 .headerCount {
-  font-size: 9px;
+  font-size: 11px;
   color: var(--dim);
 }
 
@@ -50,7 +50,7 @@
   border-radius: 3px;
   color: var(--dim);
   font-family: 'JetBrains Mono', monospace;
-  font-size: 9px;
+  font-size: 11px;
   cursor: pointer;
   letter-spacing: 1px;
   transition: color 0.12s, border-color 0.12s;

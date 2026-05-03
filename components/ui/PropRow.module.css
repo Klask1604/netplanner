@@ -7,7 +7,7 @@
 }
 
 .label {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--dim);
   flex-shrink: 0;
 }
@@ -18,7 +18,7 @@
   border-radius: 3px;
   color: var(--text);
   font-family: 'JetBrains Mono', monospace;
-  font-size: 12px;
+  font-size: 14px;
   padding: 3px 7px;
   width: 85px;
   text-align: right;
@@ -36,7 +36,7 @@
 }
 
 .unit {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--dim);
   width: 32px;
   flex-shrink: 0;
