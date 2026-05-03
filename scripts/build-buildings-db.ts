@@ -2,12 +2,10 @@
 /**
  * scripts/build-buildings-db.ts
  *
- * Citește un fișier OSM PBF local și construiește data/buildings.db.
- *
+ * Citeste un PBF OSM din data/ si scrie data/buildings.db (SQLite).
  * Rulare: npm run build:buildings
- *
- * Plasează fișierul OSM PBF în data/ (ex: romania-latest.osm.pbf sau romania-buildings.pbf)
- * Descarcă de la: https://download.geofabrik.de/europe/romania.html
+ * Exemplu fisier: romania-latest.osm.pbf in data/
+ * https://download.geofabrik.de/europe/romania.html
  */
 
 import Database from "better-sqlite3";
@@ -17,17 +15,47 @@ import path from "path";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const osmPbf = require("osm-pbf-parser");
 
-// ── Filtru bbox ────────────────────────────────────────────────────────────
-// Setează la null pentru a procesa toată România.
-// Brașov + împrejurimi (~30km rază):
-const FILTER_BBOX = {
+// Filtru bbox: null = toata aria din PBF (pass 1 tine toate nodurile in SQLite).
+// Exemplu mai jos: zona Brasov (FILTRU ingust in pass 2; pass 1 foloseste bbox extins).
+type OsmBbox = { south: number; north: number; west: number; east: number };
+
+const FILTER_BBOX: OsmBbox | null = {
   south: 45.45,
   north: 45.85,
-  west:  25.35,
-  east:  25.90,
+  west: 25.35,
+  east: 25.9,
 };
 
-// ── Helpers ────────────────────────────────────────────────────────────────
+// Pass 1: noduri din bbox extins (FILTRU + padding), ca inelele cladirilor sa aiba toate varfurile in DB.
+// 0.12 deg lat ~ 13 km. Daca vezi multe cladiri sarite in log, mareste NODE_CAPTURE_PADDING_DEG.
+const NODE_CAPTURE_PADDING_DEG = 0.12;
+
+// Helpers
+
+function expandBbox(b: OsmBbox, padDeg: number): OsmBbox {
+  return {
+    south: b.south - padDeg,
+    north: b.north + padDeg,
+    west: b.west - padDeg,
+    east: b.east + padDeg,
+  };
+}
+
+/** Bbox inel (min/max) intersecteaza bbox-ul tinta (filtru pass 2). */
+function ringBboxIntersectsFilter(
+  minLat: number,
+  maxLat: number,
+  minLng: number,
+  maxLng: number,
+  target: OsmBbox,
+): boolean {
+  return (
+    maxLat >= target.south &&
+    minLat <= target.north &&
+    maxLng >= target.west &&
+    minLng <= target.east
+  );
+}
 
 function getBuildingHeight(tags: Record<string, string>): number {
   if (tags.height) {
@@ -43,14 +71,14 @@ function getBuildingHeight(tags: Record<string, string>): number {
 
 function findPbfFile(): string {
   const dataDir = path.join(process.cwd(), "data");
-  if (!fs.existsSync(dataDir)) throw new Error("Directorul data/ nu există.");
+  if (!fs.existsSync(dataDir)) throw new Error("Directorul data/ nu exista.");
   const files = fs.readdirSync(dataDir);
-  const pbf = files.find((f) => f.endsWith(".pbf") || f.endsWith(".pbj"));
+  const pbf = files.find((f) => f.endsWith(".pbf"));
   if (!pbf) {
     throw new Error(
-      "Nu am găsit niciun fișier .pbf/.pbj în data/.\n" +
-        "Descarcă de la: https://download.geofabrik.de/europe/romania.html\n" +
-        "și plasează fișierul în data/",
+      "Nu am gasit niciun fisier .pbf in data/.\n" +
+        "Descarca de la: https://download.geofabrik.de/europe/romania.html\n" +
+        "si pune fisierul in data/",
     );
   }
   return path.join(dataDir, pbf);
@@ -68,12 +96,29 @@ function streamPbf(
   });
 }
 
-// ── Main ───────────────────────────────────────────────────────────────────
+// Main
+//
+// De ce doua parcurgeri ale aceluiasi PBF?
+// In PBF, nodurile si way-urile sunt amestecate. Un way are lista de id-uri de noduri,
+// fara coordonate. Mai intai trebuie tabel id -> (lat, lng). Pass 1 scrie nodurile in SQLite.
+// Pass 2 citeste way-urile cu tag building si citeste coordonatele din acel tabel.
+// Doua treceri: nu tinem tot graful in RAM. O singura trecere ar insemna alt design (ex. sortare pe disc).
 
 async function main() {
   const pbfPath = findPbfFile();
   const sizeMB = (fs.statSync(pbfPath).size / 1024 / 1024).toFixed(0);
   console.log(`\n[INFO] Fisier PBF: ${path.basename(pbfPath)} (${sizeMB} MB)`);
+
+  const nodeCaptureBbox: OsmBbox | null = FILTER_BBOX
+    ? expandBbox(FILTER_BBOX, NODE_CAPTURE_PADDING_DEG)
+    : null;
+  if (FILTER_BBOX) {
+    console.log(
+      `[INFO] Cladiri in bbox utilizator. Pass 1: noduri in bbox extins (+${NODE_CAPTURE_PADDING_DEG} deg fata de filtru).`,
+    );
+  } else {
+    console.log("[INFO] Fara FILTER_BBOX: toate nodurile, toate cladirile din PBF.");
+  }
 
   const dataDir = path.join(process.cwd(), "data");
   const dbPath = path.join(dataDir, "buildings.db");
@@ -83,10 +128,10 @@ async function main() {
     if (fs.existsSync(p)) fs.unlinkSync(p);
   }
 
-  // ── Pass 1: Colectează TOATE nodurile (id → lat/lng) în SQLite temp ──────
-  console.log("\n[INFO] Pass 1/2: Citire noduri OSM...");
+  // Pass 1: noduri (id, lat, lng) in SQLite temporar
+  console.log("\n[INFO] Pass 1/2: citire noduri OSM...");
   console.log(
-    "   (Poate dura 5-10 minute pentru România — ~15 milioane noduri)\n",
+    "   (pentru Romania intreaga poate dura multe minute, milioane de noduri)\n",
   );
 
   const nodeDb = new Database(tmpDbPath);
@@ -115,14 +160,16 @@ async function main() {
   await streamPbf(pbfPath, (items) => {
     for (const item of items) {
       if (item.type !== "node") continue;
-      if (
-        FILTER_BBOX &&
-        (item.lat < FILTER_BBOX.south ||
-          item.lat > FILTER_BBOX.north ||
-          item.lon < FILTER_BBOX.west ||
-          item.lon > FILTER_BBOX.east)
-      )
-        continue;
+      if (nodeCaptureBbox) {
+        if (
+          item.lat < nodeCaptureBbox.south ||
+          item.lat > nodeCaptureBbox.north ||
+          item.lon < nodeCaptureBbox.west ||
+          item.lon > nodeCaptureBbox.east
+        ) {
+          continue;
+        }
+      }
       nodeBatch.push(item);
       if (nodeBatch.length >= NODE_BATCH) {
         insertNodes(nodeBatch);
@@ -143,8 +190,10 @@ async function main() {
     `\r  ${nodeCount.toLocaleString("ro-RO")} noduri stocate.         `,
   );
 
-  // ── Pass 2: Procesează way-urile cu tag building ──────────────────────────
-  console.log("\n[INFO] Pass 2/2: Procesare cladiri...\n");
+  // Pass 2: way-uri cu tag building
+  console.log("\n[INFO] Pass 2/2: procesare cladiri...\n");
+
+  let buildingsSkippedIncompleteRing = 0;
 
   const db = new Database(dbPath);
   db.exec(`
@@ -193,12 +242,19 @@ async function main() {
     for (const item of items) {
       if (item.type !== "way" || !item.tags?.building) continue;
 
+      const refs: number[] = item.refs ?? [];
       const ring: [number, number][] = [];
-      for (const ref of item.refs ?? []) {
+      for (const ref of refs) {
         const node = getNode.get(ref) as
           | { lat: number; lng: number }
           | undefined;
         if (node) ring.push([node.lat, node.lng]);
+      }
+
+      // Noduri lipsa (in afara bbox-ului extins din pass 1): nu insera poligon trunchiat.
+      if (refs.length > 0 && ring.length < refs.length) {
+        buildingsSkippedIncompleteRing++;
+        continue;
       }
 
       if (ring.length < 3) continue;
@@ -209,12 +265,23 @@ async function main() {
 
       const lats = ring.map((p) => p[0]);
       const lngs = ring.map((p) => p[1]);
+      const minLat = Math.min(...lats);
+      const maxLat = Math.max(...lats);
+      const minLng = Math.min(...lngs);
+      const maxLng = Math.max(...lngs);
+
+      if (
+        FILTER_BBOX &&
+        !ringBboxIntersectsFilter(minLat, maxLat, minLng, maxLng, FILTER_BBOX)
+      ) {
+        continue;
+      }
 
       buildingBatch.push({
-        minLat: Math.min(...lats),
-        maxLat: Math.max(...lats),
-        minLng: Math.min(...lngs),
-        maxLng: Math.max(...lngs),
+        minLat,
+        maxLat,
+        minLng,
+        maxLng,
         height: getBuildingHeight(item.tags),
         ring: JSON.stringify(ring),
       });
@@ -238,7 +305,13 @@ async function main() {
     `\r  ${buildingCount.toLocaleString("ro-RO")} clădiri procesate.         `,
   );
 
-  // ── Finalizare ─────────────────────────────────────────────────────────
+  if (buildingsSkippedIncompleteRing > 0) {
+    console.log(
+      `[INFO] Sarite ${buildingsSkippedIncompleteRing.toLocaleString("ro-RO")} cladiri: inel incomplet (noduri in afara zonei captate pass 1). Poti mari NODE_CAPTURE_PADDING_DEG.`,
+    );
+  }
+
+  // Finalizare
   db.exec("ANALYZE;");
   db.close();
   nodeDb.close();
@@ -248,7 +321,7 @@ async function main() {
   console.log(
     `\n[DONE] ${buildingCount.toLocaleString("ro-RO")} cladiri -> ${dbPath} (${finalMB} MB)`,
   );
-  console.log("   Rulează aplicația — va folosi DB-ul local automat.");
+  console.log("   Porneste aplicatia: foloseste buildings.db din data/.");
 }
 
 main().catch((e) => {
