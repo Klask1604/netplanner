@@ -97,11 +97,32 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 6px;
   border: 1px solid var(--border);
   border-radius: 3px;
   padding: 5px 8px;
   margin-bottom: 4px;
   font-size: 12px;
+}
+
+.linkItemMain {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 2px;
+  padding: 2px 4px;
+  margin: -2px -4px;
+  outline: none;
+  transition: background 0.12s;
+}
+
+.linkItemMain:hover {
+  background: color-mix(in srgb, var(--cyan) 8%, transparent);
+}
+
+.linkItemMain:focus-visible {
+  box-shadow: 0 0 0 1px var(--cyan);
 }
 
 .linkName {

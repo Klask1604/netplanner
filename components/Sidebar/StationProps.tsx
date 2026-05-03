@@ -18,7 +18,7 @@ const HEIGHT_LABEL: Record<StationType, string> = {
 export default function StationProps() {
   const {
     selId, stations, links, updateStation, removeStation, removeLink, selectStation,
-    polygonPending, coverageDiagnostics, fetchStationElevation,
+    selectLink, polygonPending, coverageDiagnostics, fetchStationElevation,
     diagnosticMode, coverageRays, getLinkStats, getCoverageAreaKm2,
   } = useNetStore()
   const station = stations.find(s => s.id === selId)
@@ -200,50 +200,77 @@ export default function StationProps() {
       {stationLinks.length > 0 && (
         <>
           <SectionTitle>Linkuri ({stationLinks.length})</SectionTitle>
-          {stationLinks.map(({ link, other, linkStats }) => other && linkStats ? (
+          {stationLinks.map(({ link, other, linkStats }) => (
             <div key={link.id} className={styles.linkItem}>
-              <div>
-                <div className={styles.linkName}>{other.name}</div>
-                <div className={styles.linkStats}>
-                  {linkStats.distance.toFixed(2)} km · Margin:{' '}
-                  <span style={{ color: linkStats.ok ? (linkStats.losObstructed ? 'var(--amber)' : 'var(--green)') : 'var(--red)' }}>
-                    {linkStats.beamMisaligned ? 'N/A' : `${linkStats.margin.toFixed(1)} dB`}
-                  </span>
-                  {!linkStats.beamMisaligned && <>{' · FSPL: '}{linkStats.fspl.toFixed(1)} dB</>}
-                </div>
-
-                {/* ── Avertismente ordonate de severitate ── */}
-                {linkStats.beamMisaligned && (
-                  <div className={styles.linkTerrain} style={{ color: 'var(--red)' }}>
-                    [FAIL] Fascicul nealiniat — antena nu vizeaza statia destinatie
-                  </div>
-                )}
-                {!linkStats.beamMisaligned && linkStats.losObstructed && (
-                  <div className={styles.linkTerrain} style={{ color: 'var(--red)' }}>
-                    [FAIL] LOS blocat — obstacol fizic pe traseul semnalului
-                  </div>
-                )}
-                {!linkStats.beamMisaligned && linkStats.frequencyMismatch && (
-                  <div className={styles.linkTerrain} style={{ color: 'var(--amber)' }}>
-                    [WARN] Frecvente incompatibile — statiile opereaza pe benzi diferite
-                  </div>
-                )}
-                {!linkStats.beamMisaligned && !linkStats.losObstructed && linkStats.diffractionLoss > 0 && (
-                  <div className={styles.linkTerrain} style={{ color: 'var(--amber)' }}>
-                    [WARN] Diffractie teren: +{linkStats.diffractionLoss.toFixed(1)} dB pierdere Fresnel
-                  </div>
-                )}
-                {!linkStats.beamMisaligned && !linkStats.losObstructed && !linkStats.frequencyMismatch && linkStats.ok && (
-                  <div className={styles.linkTerrain} style={{ color: 'var(--green)' }}>
-                    [OK] LOS liber
-                  </div>
+              <div
+                className={styles.linkItemMain}
+                role="button"
+                tabIndex={0}
+                title="Deschide detalii link (acelasi panou ca la click pe harta)"
+                onClick={() => selectLink(link.id)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    selectLink(link.id)
+                  }
+                }}
+              >
+                {other ? (
+                  <>
+                    <div className={styles.linkName}>{other.name}</div>
+                    {linkStats ? (
+                      <>
+                        <div className={styles.linkStats}>
+                          {linkStats.distance.toFixed(2)} km · Margin:{' '}
+                          <span style={{ color: linkStats.ok ? (linkStats.losObstructed ? 'var(--amber)' : 'var(--green)') : 'var(--red)' }}>
+                            {linkStats.beamMisaligned ? 'N/A' : `${linkStats.margin.toFixed(1)} dB`}
+                          </span>
+                          {!linkStats.beamMisaligned && <>{' · FSPL: '}{linkStats.fspl.toFixed(1)} dB</>}
+                        </div>
+                        {linkStats.beamMisaligned && (
+                          <div className={styles.linkTerrain} style={{ color: 'var(--red)' }}>
+                            [FAIL] Fascicul nealiniat — antena nu vizeaza statia destinatie
+                          </div>
+                        )}
+                        {!linkStats.beamMisaligned && linkStats.losObstructed && (
+                          <div className={styles.linkTerrain} style={{ color: 'var(--red)' }}>
+                            [FAIL] LOS blocat — obstacol fizic pe traseul semnalului
+                          </div>
+                        )}
+                        {!linkStats.beamMisaligned && linkStats.frequencyMismatch && (
+                          <div className={styles.linkTerrain} style={{ color: 'var(--amber)' }}>
+                            [WARN] Frecvente incompatibile — statiile opereaza pe benzi diferite
+                          </div>
+                        )}
+                        {!linkStats.beamMisaligned && !linkStats.losObstructed && linkStats.diffractionLoss > 0 && (
+                          <div className={styles.linkTerrain} style={{ color: 'var(--amber)' }}>
+                            [WARN] Diffractie teren: +{linkStats.diffractionLoss.toFixed(1)} dB pierdere Fresnel
+                          </div>
+                        )}
+                        {!linkStats.beamMisaligned && !linkStats.losObstructed && !linkStats.frequencyMismatch && linkStats.ok && (
+                          <div className={styles.linkTerrain} style={{ color: 'var(--green)' }}>
+                            [OK] LOS liber
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <div className={styles.linkStats}>Se calculeaza link budget...</div>
+                    )}
+                  </>
+                ) : (
+                  <div className={styles.linkName}>Link (statie lipsa)</div>
                 )}
               </div>
-              <button className={styles.removeLinkBtn} onClick={() => removeLink(link.id)}>
+              <button
+                type="button"
+                className={styles.removeLinkBtn}
+                title="Sterge link"
+                onClick={() => removeLink(link.id)}
+              >
                 <X size={13} strokeWidth={1.75} />
               </button>
             </div>
-          ) : null)}
+          ))}
         </>
       )}
 
